@@ -9,40 +9,30 @@ interface AssistantCard {
   description: string;
   hasLaunchButton?: boolean;
   hasInstructions?: boolean;
+  url?: string;
 }
 
 const assistants: AssistantCard[] = [
   {
     id: '1',
-    icon: '💬',
-    title: 'Client Communication Agent',
-    description: 'Enhance client relationships with strategic communication templates, follow-up',
+    icon: '📊',
+    title: 'Site Visit App Report Generator',
+    description: 'Generate comprehensive site visit reports from uploaded data',
+    url: 'https://site-right-report-gen.vercel.app/',
   },
   {
     id: '2',
-    icon: '🏠',
-    title: 'Business & Life Guidance',
-    description: 'Chat with an AI coach that unites data-driven business strategy and personal life guidance',
+    icon: '💧',
+    title: 'Sprinkler Grid Calculator',
+    description: 'Calculate and design sprinkler grid layouts for optimal coverage',
+    url: 'https://sprinklers-web-app.vercel.app/',
   },
   {
     id: '3',
-    icon: '🔑',
-    title: "Cam's AI V2",
-    description: '',
-    hasLaunchButton: true,
-    hasInstructions: true,
-  },
-  {
-    id: '4',
-    icon: '🔧',
-    title: 'Diagnosing & Fixing Agent',
-    description: "Get your acquisition bottlenecks diagnosed by Cameron England's proven framework.",
-  },
-  {
-    id: '5',
-    icon: '▶️',
-    title: 'VSL / Confirmation Page Vid Script AI',
-    description: 'Use this License and Scale agent to help',
+    icon: '📝',
+    title: 'PDF Markup Tools',
+    description: 'Upload and markup PDFs with canvas-based annotation tools',
+    url: 'https://upload-canvas.vercel.app/',
   },
 ];
 
@@ -86,16 +76,16 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-950 via-purple-900 to-purple-950 text-white">
-      <div className="container mx-auto px-6 py-8">
+    <div className="min-h-screen bg-white text-gray-900 flex flex-col">
+      <div className="container mx-auto px-6 py-8 flex-1">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-4xl font-bold text-white tracking-tight">
+            <h1 className="text-4xl font-bold text-gray-900 tracking-tight">
               LICENSE & SCALE
           </h1>
             <svg
-              className="w-8 h-8 text-white"
+              className="w-8 h-8 text-gray-900"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -108,14 +98,14 @@ export default function Home() {
               />
             </svg>
           </div>
-          <p className="text-purple-200 text-sm mb-8">
+          <p className="text-gray-600 text-sm mb-8">
             Navigate through our specialized AI assistant to accelerate your business growth.
           </p>
         </div>
 
         {/* Navigation Buttons */}
         <div className="flex items-center justify-center gap-6 mb-8">
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-800/50 hover:bg-purple-700/50 transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-gray-900">
             <svg
               className="w-5 h-5"
               fill="none"
@@ -131,7 +121,7 @@ export default function Home() {
             </svg>
             <span>Profile</span>
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-800/50 hover:bg-purple-700/50 transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-gray-900">
             <svg
               className="w-5 h-5"
               fill="none"
@@ -153,7 +143,7 @@ export default function Home() {
             </svg>
             <span>Switch to Tools View</span>
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-800/50 hover:bg-purple-700/50 transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-gray-900">
             <svg
               className="w-5 h-5"
               fill="none"
@@ -177,10 +167,10 @@ export default function Home() {
             <input
               type="text"
               placeholder="Search AI assistants..."
-              className="w-full px-4 py-3 pl-10 rounded-lg bg-purple-800/50 border border-purple-700/50 text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="w-full px-4 py-3 pl-10 rounded-lg bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
             />
             <svg
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-purple-300"
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -202,7 +192,7 @@ export default function Home() {
             <div className="absolute left-0 top-1/2 -translate-y-1/2 z-10 flex flex-col items-center">
               <button
                 onClick={() => scroll('left')}
-                className="bg-purple-800/90 hover:bg-purple-700/90 rounded-full p-3 transition-all shadow-lg border-2 border-pink-500/50"
+                className="bg-gray-800 hover:bg-gray-700 rounded-full p-3 transition-all shadow-lg border-2 border-pink-500/50"
                 aria-label="Scroll left"
               >
                 <svg
@@ -232,27 +222,28 @@ export default function Home() {
             {assistants.map((assistant, index) => (
               <div
                 key={assistant.id}
-                className="flex-shrink-0 w-80 bg-purple-800/60 rounded-xl p-6 border border-purple-700/50 hover:border-purple-500/50 transition-all hover:shadow-lg hover:shadow-purple-500/20"
+                className={`flex-shrink-0 w-80 bg-white rounded-xl p-6 border border-gray-200 hover:border-gray-300 transition-all hover:shadow-lg ${
+                  assistant.url ? 'cursor-pointer' : ''
+                }`}
+                onClick={() => {
+                  if (assistant.url) {
+                    window.open(assistant.url, '_blank', 'noopener,noreferrer');
+                  }
+                }}
               >
                 {/* Icon */}
                 <div className="mb-4">
-                  {assistant.id === '3' ? (
-                    <div className="w-16 h-16 rounded-full bg-purple-900/80 border-2 border-purple-500 flex items-center justify-center text-2xl shadow-lg shadow-purple-500/50">
-                      🔑
-                    </div>
-                  ) : (
-                    <div className="text-3xl">{assistant.icon}</div>
-                  )}
+                  <div className="text-3xl">{assistant.icon}</div>
                 </div>
 
                 {/* Title */}
-                <h3 className="text-xl font-semibold mb-2 text-white">
+                <h3 className="text-xl font-semibold mb-2 text-gray-900">
                   {assistant.title}
                 </h3>
 
                 {/* Description */}
                 {assistant.description && (
-                  <p className="text-purple-200 text-sm mb-4">
+                  <p className="text-gray-600 text-sm mb-4">
                     {assistant.description}
                   </p>
                 )}
@@ -260,11 +251,11 @@ export default function Home() {
                 {/* Action Buttons */}
                 {assistant.hasLaunchButton && (
                   <div className="flex gap-3 mt-4">
-                    <button className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-white font-medium transition-colors">
+                    <button className="flex-1 px-4 py-2 bg-black hover:bg-gray-800 rounded-lg text-white font-medium transition-colors">
                       LAUNCH GPT →
                     </button>
                     {assistant.hasInstructions && (
-                      <button className="flex items-center gap-2 px-4 py-2 bg-purple-700/50 hover:bg-purple-600/50 rounded-lg text-white transition-colors">
+                      <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-900 transition-colors">
                         <svg
                           className="w-5 h-5"
                           fill="none"
@@ -283,6 +274,32 @@ export default function Home() {
                     )}
                   </div>
                 )}
+                {assistant.url && (
+                  <div className="flex gap-3 mt-4">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(assistant.url, '_blank', 'noopener,noreferrer');
+                      }}
+                      className="flex-1 px-4 py-2 bg-black hover:bg-gray-800 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
+                    >
+                      <span>Open App</span>
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -292,7 +309,7 @@ export default function Home() {
             <div className="absolute right-0 top-1/2 -translate-y-1/2 z-10 flex flex-col items-center">
               <button
                 onClick={() => scroll('right')}
-                className="bg-purple-800/90 hover:bg-purple-700/90 rounded-full p-3 transition-all shadow-lg border-2 border-pink-500/50"
+                className="bg-gray-800 hover:bg-gray-700 rounded-full p-3 transition-all shadow-lg border-2 border-pink-500/50"
                 aria-label="Scroll right"
               >
                 <svg
@@ -315,10 +332,18 @@ export default function Home() {
         </div>
 
         {/* Plus Button (bottom right) */}
-        <button className="fixed bottom-8 right-8 w-12 h-12 bg-purple-600 hover:bg-purple-500 rounded-full flex items-center justify-center text-2xl text-white shadow-lg transition-all hover:scale-110">
+        <button className="fixed bottom-8 right-8 w-12 h-12 bg-black hover:bg-gray-800 rounded-full flex items-center justify-center text-2xl text-white shadow-lg transition-all hover:scale-110">
           +
         </button>
       </div>
+      
+      {/* Footer */}
+      <footer className="bg-blue-300 text-white py-6 px-6">
+        <div className="container mx-auto">
+          <h2 className="text-2xl font-semibold mb-1">Fire Dynamics</h2>
+          <p className="text-sm">© 2022 Fire Dynamics Group Limited | Company number: 13476929</p>
+        </div>
+      </footer>
     </div>
   );
 }
