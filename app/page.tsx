@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface AssistantCard {
   id: string;
@@ -34,9 +35,17 @@ const assistants: AssistantCard[] = [
     description: 'Upload and markup PDFs with canvas-based annotation tools',
     url: 'https://upload-canvas.vercel.app/',
   },
+  {
+    id: '4',
+    icon: '💰',
+    title: 'Fee Proposal Generator',
+    description: 'Generate professional fire engineering fee proposal Word documents',
+    url: '/fee-proposal',
+  },
 ];
 
 export default function Home() {
+  const router = useRouter();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -227,7 +236,11 @@ export default function Home() {
                 }`}
                 onClick={() => {
                   if (assistant.url) {
-                    window.open(assistant.url, '_blank', 'noopener,noreferrer');
+                    if (assistant.url.startsWith('/')) {
+                      router.push(assistant.url);
+                    } else {
+                      window.open(assistant.url, '_blank', 'noopener,noreferrer');
+                    }
                   }
                 }}
               >
@@ -279,24 +292,30 @@ export default function Home() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.open(assistant.url, '_blank', 'noopener,noreferrer');
+                        if (assistant.url?.startsWith('/')) {
+                          router.push(assistant.url);
+                        } else {
+                          window.open(assistant.url, '_blank', 'noopener,noreferrer');
+                        }
                       }}
                       className="flex-1 px-4 py-2 bg-black hover:bg-gray-800 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
                     >
-                      <span>Open App</span>
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                        />
-                      </svg>
+                      <span>{assistant.url?.startsWith('/') ? 'Open' : 'Open App'}</span>
+                      {!assistant.url?.startsWith('/') && (
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                          />
+                        </svg>
+                      )}
                     </button>
                   </div>
                 )}
