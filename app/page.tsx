@@ -82,7 +82,7 @@ export default function Home() {
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-4xl font-bold text-gray-900 tracking-tight">
-              LICENSE & SCALE
+              Fire Dynamics
           </h1>
             <svg
               className="w-8 h-8 text-gray-900"
