@@ -8,6 +8,14 @@ export async function fetchEngineers(): Promise<Engineer[]> {
   return res.json();
 }
 
+function buildFilename(data: FeeProposalRequest): string {
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const yyyy = now.getFullYear();
+  return `${data.project.project_name} Fire Dynamics Fee Proposal ${dd}_${mm}_${yyyy}.docx`;
+}
+
 export async function generateProposal(data: FeeProposalRequest): Promise<void> {
   const res = await fetch(`${API_URL}/fee-proposals/generate`, {
     method: 'POST',
@@ -21,12 +29,7 @@ export async function generateProposal(data: FeeProposalRequest): Promise<void> 
   }
 
   const blob = await res.blob();
-  const contentDisposition = res.headers.get('Content-Disposition');
-  let filename = 'fee-proposal.docx';
-  if (contentDisposition) {
-    const match = contentDisposition.match(/filename="(.+)"/);
-    if (match) filename = match[1];
-  }
+  const filename = buildFilename(data);
 
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
