@@ -201,7 +201,7 @@ export default function Home() {
             <div className="absolute left-0 top-1/2 -translate-y-1/2 z-10 flex flex-col items-center">
               <button
                 onClick={() => scroll('left')}
-                className="bg-gray-800 hover:bg-gray-700 rounded-full p-3 transition-all shadow-lg border-2 border-pink-500/50"
+                className="bg-gray-800 hover:bg-gray-700 rounded-full p-3 transition-all shadow-lg"
                 aria-label="Scroll left"
               >
                 <svg
@@ -218,7 +218,6 @@ export default function Home() {
                   />
                 </svg>
               </button>
-              <div className="w-0.5 h-16 bg-pink-500 mt-2"></div>
             </div>
           )}
 
@@ -328,7 +327,7 @@ export default function Home() {
             <div className="absolute right-0 top-1/2 -translate-y-1/2 z-10 flex flex-col items-center">
               <button
                 onClick={() => scroll('right')}
-                className="bg-gray-800 hover:bg-gray-700 rounded-full p-3 transition-all shadow-lg border-2 border-pink-500/50"
+                className="bg-gray-800 hover:bg-gray-700 rounded-full p-3 transition-all shadow-lg"
                 aria-label="Scroll right"
               >
                 <svg
@@ -345,7 +344,6 @@ export default function Home() {
                   />
                 </svg>
               </button>
-              <div className="w-0.5 h-16 bg-pink-500 mt-2"></div>
             </div>
           )}
         </div>
