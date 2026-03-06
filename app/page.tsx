@@ -42,6 +42,13 @@ const assistants: AssistantCard[] = [
     description: 'Generate professional fire engineering fee proposal Word documents',
     url: '/fee-proposal',
   },
+  {
+    id: '5',
+    icon: '🔥',
+    title: 'External Fire Spread Calculator',
+    description: 'BRE 135 external fire spread assessment for building elevations',
+    url: '/external-firespread',
+  },
 ];
 
 export default function Home() {
