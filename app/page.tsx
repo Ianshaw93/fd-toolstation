@@ -115,9 +115,6 @@ export default function Home() {
               />
             </svg>
           </div>
-          <p className="text-gray-600 text-sm mb-8">
-            Navigate through our specialized AI assistant to accelerate your business growth.
-          </p>
         </div>
 
         {/* Navigation Buttons */}
@@ -183,7 +180,7 @@ export default function Home() {
           <div className="relative w-full max-w-md">
             <input
               type="text"
-              placeholder="Search AI assistants..."
+              placeholder="Search tools..."
               className="w-full px-4 py-3 pl-10 rounded-lg bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
             />
             <svg
@@ -364,10 +361,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Plus Button (bottom right) */}
-        <button className="fixed bottom-8 right-8 w-12 h-12 bg-black hover:bg-gray-800 rounded-full flex items-center justify-center text-2xl text-white shadow-lg transition-all hover:scale-110">
-          +
-        </button>
       </div>
       
       {/* Footer */}
