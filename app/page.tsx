@@ -48,7 +48,7 @@ const assistants: AssistantCard[] = [
     icon: '🔥',
     title: 'External Fire Spread Calculator',
     description: 'BRE 135 external fire spread assessment for building elevations',
-    wip: true,
+    url: '/external-firespread',
   },
 ];
 
@@ -238,7 +238,7 @@ export default function Home() {
             {assistants.map((assistant, index) => (
               <div
                 key={assistant.id}
-                className={`relative flex-shrink-0 w-80 bg-white rounded-xl p-6 border border-gray-200 transition-all ${
+                className={`relative flex-shrink-0 w-80 bg-white rounded-xl p-6 border border-gray-200 transition-all flex flex-col ${
                   assistant.wip ? 'opacity-75' : 'hover:border-gray-300 hover:shadow-lg'
                 } ${
                   assistant.url && !assistant.wip ? 'cursor-pointer' : ''
@@ -271,14 +271,14 @@ export default function Home() {
 
                 {/* Description */}
                 {assistant.description && (
-                  <p className="text-gray-600 text-sm mb-4">
+                  <p className="text-gray-600 text-sm mb-4 flex-grow">
                     {assistant.description}
                   </p>
                 )}
 
                 {/* Action Buttons */}
                 {assistant.hasLaunchButton && (
-                  <div className="flex gap-3 mt-4">
+                  <div className="flex gap-3 mt-auto">
                     <button className="flex-1 px-4 py-2 bg-black hover:bg-gray-800 rounded-lg text-white font-medium transition-colors">
                       LAUNCH GPT →
                     </button>
@@ -303,7 +303,7 @@ export default function Home() {
                   </div>
                 )}
                 {assistant.url && (
-                  <div className="flex gap-3 mt-4">
+                  <div className="flex gap-3 mt-auto">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
