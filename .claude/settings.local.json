@@ -6,7 +6,12 @@
       "Bash(git push:*)",
       "Bash(python:*)",
       "Bash(npx next build:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git reset:*)",
+      "Bash(python3:*)",
+      "Bash(node -e:*)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)"
     ]
   }
 }
