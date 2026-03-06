@@ -11,6 +11,7 @@ interface AssistantCard {
   hasLaunchButton?: boolean;
   hasInstructions?: boolean;
   url?: string;
+  wip?: boolean;
 }
 
 const assistants: AssistantCard[] = [
@@ -47,7 +48,7 @@ const assistants: AssistantCard[] = [
     icon: '🔥',
     title: 'External Fire Spread Calculator',
     description: 'BRE 135 external fire spread assessment for building elevations',
-    url: '/external-firespread',
+    wip: true,
   },
 ];
 
@@ -237,11 +238,13 @@ export default function Home() {
             {assistants.map((assistant, index) => (
               <div
                 key={assistant.id}
-                className={`flex-shrink-0 w-80 bg-white rounded-xl p-6 border border-gray-200 hover:border-gray-300 transition-all hover:shadow-lg ${
-                  assistant.url ? 'cursor-pointer' : ''
+                className={`relative flex-shrink-0 w-80 bg-white rounded-xl p-6 border border-gray-200 transition-all ${
+                  assistant.wip ? 'opacity-75' : 'hover:border-gray-300 hover:shadow-lg'
+                } ${
+                  assistant.url && !assistant.wip ? 'cursor-pointer' : ''
                 }`}
                 onClick={() => {
-                  if (assistant.url) {
+                  if (assistant.url && !assistant.wip) {
                     if (assistant.url.startsWith('/')) {
                       router.push(assistant.url);
                     } else {
@@ -250,6 +253,12 @@ export default function Home() {
                   }
                 }}
               >
+                {assistant.wip && (
+                  <span className="absolute top-3 right-3 px-2 py-1 bg-gray-200 text-gray-500 text-xs font-medium rounded-full">
+                    WIP
+                  </span>
+                )}
+
                 {/* Icon */}
                 <div className="mb-4">
                   <div className="text-3xl">{assistant.icon}</div>
