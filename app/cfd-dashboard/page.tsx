@@ -122,6 +122,7 @@ export default function CfdDashboardPage() {
                   </div>
                   <ProgressBar percent={state.current.progress_pct ?? 0} />
                   <div className="flex gap-6 mt-3 text-sm text-gray-500">
+                    {state.current.machine_name && <span className="font-mono">{state.current.machine_name}</span>}
                     <span>{state.current.meshes} meshes</span>
                     <span>T_END: {state.current.t_end}s</span>
                     <span>Elapsed: {formatDuration(state.current.started_at, null)}</span>
@@ -145,6 +146,7 @@ export default function CfdDashboardPage() {
                     <div key={sim.id} className="px-6 py-3 flex items-center gap-3">
                       <span className="text-gray-400 text-sm font-mono w-6">{i + 1}.</span>
                       <span className="text-gray-900">{sim.name}</span>
+                      {sim.machine_name && <span className="text-xs text-gray-400 font-mono">{sim.machine_name}</span>}
                     </div>
                   ))}
                 </div>
@@ -164,6 +166,7 @@ export default function CfdDashboardPage() {
                     <thead>
                       <tr className="text-left text-gray-500 border-b border-gray-200">
                         <th className="pb-2 pr-4 font-medium">Name</th>
+                        <th className="pb-2 pr-4 font-medium">Machine</th>
                         <th className="pb-2 pr-4 font-medium">Duration</th>
                         <th className="pb-2 font-medium">Completed</th>
                       </tr>
@@ -172,6 +175,7 @@ export default function CfdDashboardPage() {
                       {state.completed.map((sim) => (
                         <tr key={sim.id}>
                           <td className="py-2 pr-4 text-gray-900">{sim.name}</td>
+                          <td className="py-2 pr-4 text-gray-500 font-mono text-xs">{sim.machine_name || '-'}</td>
                           <td className="py-2 pr-4 text-gray-600">{formatDuration(sim.started_at, sim.completed_at)}</td>
                           <td className="py-2 text-gray-600">{formatDate(sim.completed_at)}</td>
                         </tr>
@@ -194,7 +198,10 @@ export default function CfdDashboardPage() {
                   {state.errors.map((sim) => (
                     <div key={sim.id} className="bg-red-50 border border-red-200 rounded-lg p-4">
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-red-800">{sim.name}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="font-medium text-red-800">{sim.name}</span>
+                          {sim.machine_name && <span className="text-xs text-red-400 font-mono">{sim.machine_name}</span>}
+                        </div>
                         <span className="text-sm text-red-500">{formatDate(sim.updated_at)}</span>
                       </div>
                       {sim.error_msg && (

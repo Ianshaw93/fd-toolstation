@@ -14,6 +14,7 @@ Usage:
 """
 
 import os
+import platform
 import re
 import shutil
 import sys
@@ -21,6 +22,8 @@ import time
 import threading
 import argparse
 from subprocess import Popen, PIPE
+
+MACHINE_NAME = platform.node()
 
 try:
     import requests
@@ -58,7 +61,7 @@ def post_status(event: str, data: dict) -> None:
     try:
         requests.post(
             f"{DASHBOARD_URL}/cfd-dashboard/status",
-            json={"event": event, "data": data},
+            json={"event": event, "data": {**data, "machine_name": MACHINE_NAME}},
             headers={"X-API-Key": API_KEY, "Content-Type": "application/json"},
             timeout=10,
         )

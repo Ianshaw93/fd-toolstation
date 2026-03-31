@@ -40,33 +40,62 @@ function useCfdStatus() {
 }
 
 function CfdBadge({ state }: { state: CfdDashboardState | null }) {
-  if (!state || !state.current) {
-    // Nothing running or can't reach server — normal icon, no error
+  // Can't reach server — just show normal icon
+  if (!state) {
     return <span className="text-3xl">🖥️</span>;
   }
 
-  const sim = state.current;
-  const pct = (sim.progress_pct ?? 0).toFixed(0);
-  const runnerOnline = state.runner.status === 'online';
+  const runnerStatus = state.runner.status;
+  const statusColor = runnerStatus === 'online' ? 'bg-green-500' : runnerStatus === 'idle' ? 'bg-yellow-400' : 'bg-gray-400';
+  const statusLabel = runnerStatus === 'online' ? 'Online' : runnerStatus === 'idle' ? 'Idle' : 'Offline';
 
+  const machineName = state.runner.machine_name || 'Unknown';
+
+  // Simulation actively running
+  if (state.current) {
+    const sim = state.current;
+    const pct = (sim.progress_pct ?? 0).toFixed(0);
+
+    return (
+      <div className="flex flex-col items-start gap-1.5 w-full">
+        <div className="flex items-center gap-2">
+          <span className={`w-2.5 h-2.5 rounded-full ${statusColor} animate-pulse`} />
+          <span className="text-xs font-medium text-gray-700 truncate max-w-[180px]">
+            {sim.name}
+          </span>
+        </div>
+        <span className="text-[10px] text-gray-400 font-mono">{machineName}</span>
+        <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500"
+            style={{ width: `${Math.min(Number(pct), 100)}%` }}
+          />
+        </div>
+        <div className="flex items-center gap-3 text-xs text-gray-500">
+          <span>{pct}%</span>
+          {state.queue.length > 0 && <span>+{state.queue.length} queued</span>}
+          {state.completed.length > 0 && <span>{state.completed.length} done</span>}
+        </div>
+      </div>
+    );
+  }
+
+  // Nothing running — show summary stats
   return (
-    <div className="flex flex-col items-start gap-1">
+    <div className="flex flex-col items-start gap-1.5 w-full">
       <div className="flex items-center gap-2">
-        <span className={`w-2.5 h-2.5 rounded-full ${runnerOnline ? 'bg-green-500 animate-pulse' : 'bg-yellow-400'}`} />
-        <span className="text-xs font-medium text-gray-700 truncate max-w-[180px]">
-          {sim.name}
-        </span>
+        <span className={`w-2.5 h-2.5 rounded-full ${statusColor}`} />
+        <span className="text-xs font-medium text-gray-600">{statusLabel}</span>
       </div>
-      <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500"
-          style={{ width: `${Math.min(Number(pct), 100)}%` }}
-        />
+      <span className="text-[10px] text-gray-400 font-mono">{machineName}</span>
+      <div className="flex items-center gap-3 text-xs text-gray-500">
+        {state.queue.length > 0 && <span>{state.queue.length} queued</span>}
+        {state.completed.length > 0 && <span>{state.completed.length} completed</span>}
+        {state.errors.length > 0 && <span className="text-red-500">{state.errors.length} errors</span>}
+        {state.queue.length === 0 && state.completed.length === 0 && state.errors.length === 0 && (
+          <span>No simulations</span>
+        )}
       </div>
-      <span className="text-xs text-gray-500">{pct}% complete</span>
-      {state.queue.length > 0 && (
-        <span className="text-xs text-gray-400">+{state.queue.length} queued</span>
-      )}
     </div>
   );
 }

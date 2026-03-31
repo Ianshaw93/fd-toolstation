@@ -11,12 +11,14 @@ export interface CfdSimulation {
   completed_at: string | null;
   error_msg: string | null;
   updated_at: string | null;
+  machine_name: string | null;
 }
 
 export interface CfdDashboardState {
   runner: {
     status: 'online' | 'idle' | 'offline';
     last_heartbeat: string | null;
+    machine_name: string | null;
   };
   current: CfdSimulation | null;
   queue: CfdSimulation[];
