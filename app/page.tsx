@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { fetchDashboardState, CfdDashboardState } from '../lib/cfd-api';
 
 interface AssistantCard {
   id: string;
@@ -12,9 +13,73 @@ interface AssistantCard {
   hasInstructions?: boolean;
   url?: string;
   wip?: boolean;
+  liveStatus?: 'cfd';
+}
+
+function useCfdStatus() {
+  const [state, setState] = useState<CfdDashboardState | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function poll() {
+      try {
+        const data = await fetchDashboardState();
+        if (active) setState(data);
+      } catch {
+        if (active) setState(null);
+      }
+    }
+
+    poll();
+    const interval = setInterval(poll, 15_000);
+    return () => { active = false; clearInterval(interval); };
+  }, []);
+
+  return state;
+}
+
+function CfdBadge({ state }: { state: CfdDashboardState | null }) {
+  if (!state || !state.current) {
+    // Nothing running or can't reach server — normal icon, no error
+    return <span className="text-3xl">🖥️</span>;
+  }
+
+  const sim = state.current;
+  const pct = (sim.progress_pct ?? 0).toFixed(0);
+  const runnerOnline = state.runner.status === 'online';
+
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <div className="flex items-center gap-2">
+        <span className={`w-2.5 h-2.5 rounded-full ${runnerOnline ? 'bg-green-500 animate-pulse' : 'bg-yellow-400'}`} />
+        <span className="text-xs font-medium text-gray-700 truncate max-w-[180px]">
+          {sim.name}
+        </span>
+      </div>
+      <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500"
+          style={{ width: `${Math.min(Number(pct), 100)}%` }}
+        />
+      </div>
+      <span className="text-xs text-gray-500">{pct}% complete</span>
+      {state.queue.length > 0 && (
+        <span className="text-xs text-gray-400">+{state.queue.length} queued</span>
+      )}
+    </div>
+  );
 }
 
 const assistants: AssistantCard[] = [
+  {
+    id: '6',
+    icon: '🖥️',
+    title: 'CFD Dashboard',
+    description: 'Live FDS simulation status — see what\'s running, progress, and queue',
+    url: '/cfd-dashboard',
+    liveStatus: 'cfd',
+  },
   {
     id: '1',
     icon: '📊',
@@ -54,6 +119,7 @@ const assistants: AssistantCard[] = [
 
 export default function Home() {
   const router = useRouter();
+  const cfdStatus = useCfdStatus();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -256,9 +322,13 @@ export default function Home() {
                   </span>
                 )}
 
-                {/* Icon */}
+                {/* Icon / Live Status */}
                 <div className="mb-4">
-                  <div className="text-3xl">{assistant.icon}</div>
+                  {assistant.liveStatus === 'cfd' ? (
+                    <CfdBadge state={cfdStatus} />
+                  ) : (
+                    <div className="text-3xl">{assistant.icon}</div>
+                  )}
                 </div>
 
                 {/* Title */}
