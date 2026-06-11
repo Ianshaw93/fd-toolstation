@@ -84,7 +84,7 @@ export default function FeeProposalForm() {
 
       <CollapsibleSection title="Customise Wording (this proposal only)" defaultOpen={false}>
         <ProposalTextOverrides
-          state={state}
+          request={buildRequest()}
           overrides={textOverrides}
           onChange={setTextOverrides}
         />
