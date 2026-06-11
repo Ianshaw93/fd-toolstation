@@ -138,6 +138,13 @@ const assistants: AssistantCard[] = [
     url: '/fee-proposal',
   },
   {
+    id: '7',
+    icon: '✏️',
+    title: 'Manage Proposal Text',
+    description: 'Edit the default wording used in fee proposals, with history and rollback',
+    url: '/manage-proposal-text',
+  },
+  {
     id: '5',
     icon: '🔥',
     title: 'External Fire Spread Calculator',
