@@ -11,7 +11,6 @@ import FeeOptionsSection from './FeeOptionsSection';
 import DesignStagesSection from './DesignStagesSection';
 import ConstructionStagesSection from './ConstructionStagesSection';
 import CompletionStagesSection from './CompletionStagesSection';
-import ProposalTextOverrides from './ProposalTextOverrides';
 import ManageWordingDrawer from './ManageWordingDrawer';
 import FeeSummaryBar from './FeeSummaryBar';
 
@@ -20,7 +19,6 @@ export default function FeeProposalForm() {
   const [engineers, setEngineers] = useState<Engineer[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [textOverrides, setTextOverrides] = useState<Record<string, string>>({});
   const [manageOpen, setManageOpen] = useState(false);
 
   useEffect(() => {
@@ -34,9 +32,6 @@ export default function FeeProposalForm() {
     setIsGenerating(true);
     try {
       const request = buildRequest();
-      if (Object.keys(textOverrides).length > 0) {
-        request.text_overrides = textOverrides;
-      }
       await generateProposal(request);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate proposal');
@@ -96,14 +91,6 @@ export default function FeeProposalForm() {
 
       <CollapsibleSection title="Completion: RIBA 6" defaultOpen={false}>
         <CompletionStagesSection stages={state.design_stages_6} dispatch={dispatch} />
-      </CollapsibleSection>
-
-      <CollapsibleSection title="Customise Wording (this proposal only)" defaultOpen={false}>
-        <ProposalTextOverrides
-          request={buildRequest()}
-          overrides={textOverrides}
-          onChange={setTextOverrides}
-        />
       </CollapsibleSection>
 
       {/* The fixed create-report bar is irrelevant while managing wording, and

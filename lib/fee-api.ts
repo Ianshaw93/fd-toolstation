@@ -19,17 +19,6 @@ export async function fetchTextBlocks(): Promise<TextBlock[]> {
   return res.json();
 }
 
-/** Dry run: which text-block keys this request would actually render. */
-export async function fetchApplicableTextBlocks(data: FeeProposalRequest): Promise<string[]> {
-  const res = await fetch(`${API_URL}/fee-proposals/applicable-text-blocks`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw await asError(res, 'Failed to resolve applicable text blocks');
-  return res.json();
-}
-
 export async function updateTextBlock(key: string, content: string, editedBy: string): Promise<TextBlock> {
   const res = await fetch(`${API_URL}/fee-proposals/text-blocks/${key}`, {
     method: 'PUT',
