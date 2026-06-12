@@ -9,6 +9,7 @@ import {
 } from '../../lib/fee-api';
 import type { TextBlock, TextBlockHistoryEntry } from '../../lib/fee-types';
 import ConfirmSaveDefaultModal, { rememberedName } from './ConfirmSaveDefaultModal';
+import TextBlockPreview from './TextBlockPreview';
 
 interface Props {
   block: TextBlock;
@@ -83,12 +84,20 @@ export default function ManageTextBlockEditor({ block, editorName }: Props) {
       {block.kind === 'bullet_list' && (
         <p className="text-xs text-gray-400 mb-1">One bullet per line.</p>
       )}
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        rows={block.kind === 'bullet_list' ? 5 : 3}
-        className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-400 font-mono"
-      />
+      <div className="grid gap-3 md:grid-cols-2">
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={block.kind === 'bullet_list' ? 5 : 3}
+          className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-400 font-mono"
+        />
+        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+            How it reads in the report
+          </p>
+          <TextBlockPreview kind={block.kind} content={content} placeholders={block.placeholders} />
+        </div>
+      </div>
       <div className="flex items-center gap-2 mt-2">
         <button
           onClick={() => setConfirming(true)}
