@@ -16,8 +16,9 @@ export default function BuildingOverviewSection({ data, onChange }: BuildingOver
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Has Suppression</label>
+        <label htmlFor="hasSuppression" className="block text-sm font-medium text-gray-700 mb-1">Has Suppression</label>
         <select
+          id="hasSuppression"
           value={data.hasSuppression ? 'Yes' : 'No'}
           onChange={(e) => onChange('hasSuppression', e.target.value === 'Yes')}
           className={inputClass}
@@ -27,8 +28,9 @@ export default function BuildingOverviewSection({ data, onChange }: BuildingOver
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Suppression Standard</label>
+        <label htmlFor="suppressionStandard" className="block text-sm font-medium text-gray-700 mb-1">Suppression Standard</label>
         <select
+          id="suppressionStandard"
           value={data.suppressionStandard}
           onChange={(e) => onChange('suppressionStandard', e.target.value)}
           className={inputClass}
@@ -39,8 +41,9 @@ export default function BuildingOverviewSection({ data, onChange }: BuildingOver
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Fire Alarm &amp; Detection Category</label>
+        <label htmlFor="fireAlarmCategory" className="block text-sm font-medium text-gray-700 mb-1">Fire Alarm &amp; Detection Category</label>
         <select
+          id="fireAlarmCategory"
           value={data.fireAlarmCategory}
           onChange={(e) => onChange('fireAlarmCategory', e.target.value)}
           className={inputClass}
@@ -51,8 +54,9 @@ export default function BuildingOverviewSection({ data, onChange }: BuildingOver
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Investigation Period</label>
+        <label htmlFor="investigationPeriod" className="block text-sm font-medium text-gray-700 mb-1">Investigation Period</label>
         <select
+          id="investigationPeriod"
           value={data.investigationPeriod ? 'Yes' : 'No'}
           onChange={(e) => onChange('investigationPeriod', e.target.value === 'Yes')}
           className={inputClass}
@@ -62,8 +66,9 @@ export default function BuildingOverviewSection({ data, onChange }: BuildingOver
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Required Fire Resistance (mins)</label>
+        <label htmlFor="requiredFireResistance" className="block text-sm font-medium text-gray-700 mb-1">Required Fire Resistance (mins)</label>
         <input
+          id="requiredFireResistance"
           type="number"
           value={data.requiredFireResistance}
           onChange={(e) => onChange('requiredFireResistance', e.target.value)}

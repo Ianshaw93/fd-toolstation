@@ -2,6 +2,7 @@
 
 import { Dispatch } from 'react';
 import type { ServiceConfig } from '../../lib/fee-types';
+import type { Action } from '../../hooks/useFeeProposal';
 import { MONTHS, YEARS, SERVICES_WITH_MODELS, SERVICES_WITH_EXTENDED_TRAVEL, SERVICES_WITH_HOURS } from '../../lib/fee-constants';
 
 interface Props {
@@ -10,7 +11,7 @@ interface Props {
   config: ServiceConfig;
   dispatchType: string;
   toggleType: string;
-  dispatch: Dispatch<any>;
+  dispatch: Dispatch<Action>;
 }
 
 export default function ServiceRow({ serviceKey, label, config, dispatchType, toggleType, dispatch }: Props) {
@@ -18,8 +19,10 @@ export default function ServiceRow({ serviceKey, label, config, dispatchType, to
   const hasExtendedTravel = SERVICES_WITH_EXTENDED_TRAVEL.has(serviceKey);
   const hasHours = SERVICES_WITH_HOURS.has(serviceKey);
 
-  const setField = (field: keyof ServiceConfig, value: any) => {
-    dispatch({ type: dispatchType, key: serviceKey, field, value });
+  const setField = (field: keyof ServiceConfig, value: boolean | number | string | null) => {
+    // dispatchType/serviceKey arrive as strings, so the discriminated action is
+    // assembled dynamically and asserted to the union.
+    dispatch({ type: dispatchType, key: serviceKey, field, value } as unknown as Action);
   };
 
   return (
@@ -31,7 +34,7 @@ export default function ServiceRow({ serviceKey, label, config, dispatchType, to
         <input
           type="checkbox"
           checked={config.included}
-          onChange={() => dispatch({ type: toggleType, key: serviceKey })}
+          onChange={() => dispatch({ type: toggleType, key: serviceKey } as unknown as Action)}
           className="w-4 h-4 rounded"
         />
       </td>

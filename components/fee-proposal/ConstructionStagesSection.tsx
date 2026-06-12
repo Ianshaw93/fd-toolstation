@@ -2,12 +2,13 @@
 
 import { Dispatch } from 'react';
 import type { DesignStagesRiba5 } from '../../lib/fee-types';
+import type { Action } from '../../hooks/useFeeProposal';
 import { SERVICE_LABELS_5 } from '../../lib/fee-constants';
 import ServiceRow from './ServiceRow';
 
 interface Props {
   stages: DesignStagesRiba5;
-  dispatch: Dispatch<any>;
+  dispatch: Dispatch<Action>;
 }
 
 const SERVICE_KEYS = Object.keys(SERVICE_LABELS_5) as (keyof DesignStagesRiba5)[];

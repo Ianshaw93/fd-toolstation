@@ -24,16 +24,16 @@ const blocks: TextBlock[] = [
 ];
 
 function requestWithStage1(): FeeProposalRequest {
-  const base14: any = {
+  const base14 = {
     stage_1: { ...off(), included: true }, stage_2: off(), london_plan: off(), gateway: off(),
     stage_3: off(), stage_4: off(), common_corridor_cfd: off(), open_plan_cfd: off(),
     warehouse_structural: off(), warehouse_cfd: off(), peer_review: off(),
   };
-  const base5: any = {
+  const base5 = {
     construction_advice: off(), site_visits: off(), site_risk_assessment: off(),
     cfsmp: off(), phased_occupation: off(), client_monitoring: off(),
   };
-  const base6: any = { regulation_38: off(), ews1_forms: off(), rro_risk_assessment: off() };
+  const base6 = { regulation_38: off(), ews1_forms: off(), rro_risk_assessment: off() };
   return {
     client: { first_name: 'A', surname: 'B', address_lines: [] },
     project: { project_name: 'P', project_location: 'L', country: 'EW' },

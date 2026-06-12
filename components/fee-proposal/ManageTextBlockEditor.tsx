@@ -43,8 +43,8 @@ export default function ManageTextBlockEditor({ block, editorName }: Props) {
       setContent(updated.content);
       setMessage({ kind: 'ok', text: okText });
       if (history) setHistory(await fetchTextBlockHistory(block.key));
-    } catch (err: any) {
-      setMessage({ kind: 'err', text: err.message });
+    } catch (err) {
+      setMessage({ kind: 'err', text: err instanceof Error ? err.message : 'Something went wrong' });
     } finally {
       setBusy(false);
     }
@@ -62,8 +62,8 @@ export default function ManageTextBlockEditor({ block, editorName }: Props) {
     if (history) { setHistory(null); return; }
     try {
       setHistory(await fetchTextBlockHistory(block.key));
-    } catch (err: any) {
-      setMessage({ kind: 'err', text: err.message });
+    } catch (err) {
+      setMessage({ kind: 'err', text: err instanceof Error ? err.message : 'Something went wrong' });
     }
   };
   const handleRestore = (id: number) => {

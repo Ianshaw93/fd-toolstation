@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { fetchDashboardState, CfdDashboardState, CfdSimulation } from '../../lib/cfd-api';
+import { fetchDashboardState, CfdDashboardState } from '../../lib/cfd-api';
 
 function RunnerStatusDot({ status }: { status: string }) {
   const colors: Record<string, string> = {
@@ -60,7 +60,7 @@ export default function CfdDashboardPage() {
           setState(data);
           setError(null);
         }
-      } catch (e) {
+      } catch {
         if (active) setError('Failed to connect to server');
       }
     }

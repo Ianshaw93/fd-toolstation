@@ -2,11 +2,12 @@
 
 import { Dispatch } from 'react';
 import type { FeeOptions, Engineer } from '../../lib/fee-types';
+import type { Action } from '../../hooks/useFeeProposal';
 
 interface Props {
   feeOptions: FeeOptions;
   engineers: Engineer[];
-  dispatch: Dispatch<any>;
+  dispatch: Dispatch<Action>;
 }
 
 export default function FeeOptionsSection({ feeOptions, engineers, dispatch }: Props) {

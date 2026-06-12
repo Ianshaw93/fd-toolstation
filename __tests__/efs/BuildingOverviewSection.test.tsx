@@ -12,10 +12,8 @@ const defaultProps: BuildingOverview = {
 
 function renderSection(overrides: Partial<BuildingOverview> = {}) {
   const onChange = jest.fn();
-  const props = { ...defaultProps, ...overrides };
-  const result = render(
-    <BuildingOverviewSection {...props} onChange={onChange} />
-  );
+  const data = { ...defaultProps, ...overrides };
+  const result = render(<BuildingOverviewSection data={data} onChange={onChange} />);
   return { ...result, onChange };
 }
 
@@ -26,7 +24,7 @@ describe('BuildingOverviewSection', () => {
     expect(screen.getByLabelText('Suppression Standard')).toBeInTheDocument();
     expect(screen.getByLabelText('Fire Alarm & Detection Category')).toBeInTheDocument();
     expect(screen.getByLabelText('Investigation Period')).toBeInTheDocument();
-    expect(screen.getByLabelText('Required Fire Resistance (minutes)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Required Fire Resistance (mins)')).toBeInTheDocument();
   });
 
   it('calls onChange when suppression toggled', () => {
@@ -37,7 +35,7 @@ describe('BuildingOverviewSection', () => {
 
   it('calls onChange for fire resistance input', () => {
     const { onChange } = renderSection();
-    fireEvent.change(screen.getByLabelText('Required Fire Resistance (minutes)'), { target: { value: '60' } });
+    fireEvent.change(screen.getByLabelText('Required Fire Resistance (mins)'), { target: { value: '60' } });
     expect(onChange).toHaveBeenCalledWith('requiredFireResistance', '60');
   });
 

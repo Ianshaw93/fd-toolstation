@@ -62,7 +62,7 @@ export default function ConfirmSaveDefaultModal({
       aria-label={`Save “${block.label}” as the default`}
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
     >
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-3xl rounded-2xl bg-white p-6 shadow-xl">
         <h3 className="text-lg font-semibold text-gray-900">Save “{block.label}” as the default?</h3>
         <p className="mt-1 text-sm text-gray-600">
           This replaces the wording for <strong>all future proposals</strong>, not just this one.

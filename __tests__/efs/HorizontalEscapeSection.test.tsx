@@ -9,19 +9,20 @@ function createEmptyRow(): HorizontalEscapeRow {
   return { name: '', use: 'Warehouse', exitWidths: Array(MAX_EXIT_WIDTHS).fill('') };
 }
 
-function renderSection(overrides: { rows?: HorizontalEscapeRow[]; numRows?: number; numExitWidths?: number } = {}) {
+function renderSection(overrides: { rows?: HorizontalEscapeRow[]; numRows?: number; numExitCols?: number } = {}) {
   const onChange = jest.fn();
   const rows = overrides.rows || Array.from({ length: MAX_ROWS }, createEmptyRow);
   const numRows = overrides.numRows ?? 6;
-  const numExitWidths = overrides.numExitWidths ?? 3;
+  const numExitCols = overrides.numExitCols ?? 3;
   const result = render(
     <HorizontalEscapeSection
       rows={rows}
       numRows={numRows}
-      numExitWidths={numExitWidths}
+      numExitCols={numExitCols}
       onChange={onChange}
       onNumRowsChange={jest.fn()}
-      onNumExitWidthsChange={jest.fn()}
+      onNumExitColsChange={jest.fn()}
+      onExitWidthChange={jest.fn()}
     />
   );
   return { ...result, onChange };
@@ -30,10 +31,9 @@ function renderSection(overrides: { rows?: HorizontalEscapeRow[]; numRows?: numb
 describe('HorizontalEscapeSection', () => {
   it('renders the correct number of area rows', () => {
     renderSection({ numRows: 3 });
-    // Each row has an area number cell; look for area numbers 1, 2, 3
-    expect(screen.getByText('1')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
+    // One name input per area row — unambiguous, unlike the digit "1" which also
+    // appears in the row-count and exit-column dropdown options.
+    expect(screen.getAllByRole('textbox')).toHaveLength(3);
   });
 
   it('renders Name and Use columns', () => {
@@ -42,8 +42,8 @@ describe('HorizontalEscapeSection', () => {
     expect(screen.getByText('Use')).toBeInTheDocument();
   });
 
-  it('renders exit width columns based on numExitWidths', () => {
-    renderSection({ numRows: 1, numExitWidths: 4 });
+  it('renders exit width columns based on numExitCols', () => {
+    renderSection({ numRows: 1, numExitCols: 4 });
     // Exit width column headers "Exit 1" through "Exit 4"
     expect(screen.getByText('Exit 1')).toBeInTheDocument();
     expect(screen.getByText('Exit 4')).toBeInTheDocument();

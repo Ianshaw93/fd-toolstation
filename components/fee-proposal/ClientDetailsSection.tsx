@@ -2,10 +2,11 @@
 
 import { Dispatch } from 'react';
 import type { ClientDetails } from '../../lib/fee-types';
+import type { Action } from '../../hooks/useFeeProposal';
 
 interface Props {
   client: ClientDetails;
-  dispatch: Dispatch<any>;
+  dispatch: Dispatch<Action>;
 }
 
 export default function ClientDetailsSection({ client, dispatch }: Props) {

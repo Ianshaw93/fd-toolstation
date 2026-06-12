@@ -25,7 +25,7 @@ interface FeeProposalState {
   design_stages_6: DesignStagesRiba6;
 }
 
-type Action =
+export type Action =
   | { type: 'SET_CLIENT'; field: keyof ClientDetails; value: string | string[] }
   | { type: 'SET_PROJECT'; field: keyof ProjectDetails; value: string }
   | { type: 'SET_FEE_OPTIONS'; field: keyof FeeOptions; value: string | number | boolean }

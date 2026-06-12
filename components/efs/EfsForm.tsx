@@ -129,8 +129,8 @@ export default function EfsForm() {
         is_commercial: isCommercial,
       });
       setResults(response.elevations);
-    } catch (err: any) {
-      setError(err.message || 'Calculation failed');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Calculation failed');
     } finally {
       setIsCalculating(false);
     }
@@ -153,8 +153,8 @@ export default function EfsForm() {
         },
         projectDetails.projectName || undefined,
       );
-    } catch (err: any) {
-      setError(err.message || 'Failed to generate report');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate report');
     } finally {
       setIsGeneratingReport(false);
     }

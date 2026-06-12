@@ -327,7 +327,7 @@ export default function Home() {
             onScroll={checkScrollability}
             className="flex gap-6 overflow-x-auto scrollbar-hide px-12 pb-4"
           >
-            {assistants.map((assistant, index) => (
+            {assistants.map((assistant) => (
               <div
                 key={assistant.id}
                 className={`relative flex-shrink-0 w-80 bg-white rounded-xl p-6 border border-gray-200 transition-all flex flex-col ${

@@ -38,8 +38,8 @@ export default function FeeProposalForm() {
         request.text_overrides = textOverrides;
       }
       await generateProposal(request);
-    } catch (err: any) {
-      setError(err.message || 'Failed to generate proposal');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate proposal');
     } finally {
       setIsGenerating(false);
     }

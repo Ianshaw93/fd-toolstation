@@ -2,11 +2,12 @@
 
 import { Dispatch } from 'react';
 import type { ProjectDetails } from '../../lib/fee-types';
+import type { Action } from '../../hooks/useFeeProposal';
 import { COUNTRIES } from '../../lib/fee-constants';
 
 interface Props {
   project: ProjectDetails;
-  dispatch: Dispatch<any>;
+  dispatch: Dispatch<Action>;
 }
 
 export default function ProjectDetailsSection({ project, dispatch }: Props) {

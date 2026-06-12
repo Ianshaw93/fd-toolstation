@@ -1,5 +1,10 @@
 import { relevantGroupsForState, ALWAYS_GROUPS } from '../lib/fee-text-groups';
-import type { ServiceConfig } from '../lib/fee-types';
+import type {
+  ServiceConfig,
+  DesignStagesRiba1to4,
+  DesignStagesRiba5,
+  DesignStagesRiba6,
+} from '../lib/fee-types';
 
 function off(): ServiceConfig {
   return {
@@ -29,9 +34,9 @@ function mkState(overrides: {
   };
   const base6 = { regulation_38: off(), ews1_forms: off(), rro_risk_assessment: off() };
   return {
-    design_stages_1_4: { ...base14, ...overrides.s14 } as any,
-    design_stages_5: { ...base5, ...overrides.s5 } as any,
-    design_stages_6: { ...base6, ...overrides.s6 } as any,
+    design_stages_1_4: { ...base14, ...overrides.s14 } as DesignStagesRiba1to4,
+    design_stages_5: { ...base5, ...overrides.s5 } as DesignStagesRiba5,
+    design_stages_6: { ...base6, ...overrides.s6 } as DesignStagesRiba6,
   };
 }
 
