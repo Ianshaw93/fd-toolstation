@@ -8,6 +8,7 @@ import {
   restoreTextBlock,
 } from '../../lib/fee-api';
 import type { TextBlock, TextBlockHistoryEntry } from '../../lib/fee-types';
+import ConfirmSaveDefaultModal, { rememberedName } from './ConfirmSaveDefaultModal';
 
 interface Props {
   block: TextBlock;
@@ -19,13 +20,14 @@ export default function ManageTextBlockEditor({ block, editorName }: Props) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [history, setHistory] = useState<TextBlockHistoryEntry[] | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   const dirty = content !== block.content;
 
   const requireName = (): string | null => {
-    const name = editorName.trim();
+    const name = editorName.trim() || rememberedName();
     if (!name) {
-      setMessage({ kind: 'err', text: 'Enter your name at the top before saving.' });
+      setMessage({ kind: 'err', text: 'Save a default once to record your name, then try again.' });
       return null;
     }
     return name;
@@ -47,9 +49,9 @@ export default function ManageTextBlockEditor({ block, editorName }: Props) {
     }
   };
 
-  const handleSave = () => {
-    const name = requireName();
-    if (name) run(() => updateTextBlock(block.key, content, name), 'Saved as default.');
+  const saveAsDefault = async (name: string) => {
+    await run(() => updateTextBlock(block.key, content, name), 'Saved as default.');
+    setConfirming(false);
   };
   const handleReset = () => {
     const name = requireName();
@@ -89,7 +91,7 @@ export default function ManageTextBlockEditor({ block, editorName }: Props) {
       />
       <div className="flex items-center gap-2 mt-2">
         <button
-          onClick={handleSave}
+          onClick={() => setConfirming(true)}
           disabled={busy || !dirty}
           className="px-3 py-1.5 text-sm rounded-lg bg-black text-white hover:bg-gray-800 disabled:opacity-40"
         >
@@ -137,6 +139,16 @@ export default function ManageTextBlockEditor({ block, editorName }: Props) {
             </div>
           ))}
         </div>
+      )}
+
+      {confirming && (
+        <ConfirmSaveDefaultModal
+          block={block}
+          content={content}
+          busy={busy}
+          onCancel={() => setConfirming(false)}
+          onConfirm={saveAsDefault}
+        />
       )}
     </div>
   );

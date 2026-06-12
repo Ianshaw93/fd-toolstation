@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { fetchTextBlocks, fetchApplicableTextBlocks } from '../../lib/fee-api';
+import { fetchTextBlocks, fetchApplicableTextBlocks, updateTextBlock } from '../../lib/fee-api';
 import type { TextBlock, FeeProposalRequest } from '../../lib/fee-types';
 import { relevantGroupsForState } from '../../lib/fee-text-groups';
 import CollapsibleSection from './CollapsibleSection';
+import ConfirmSaveDefaultModal from './ConfirmSaveDefaultModal';
 
 interface Props {
   request: FeeProposalRequest;
@@ -18,6 +19,10 @@ export default function ProposalTextOverrides({ request, overrides, onChange }: 
   // Exact keys the proposal will render (from the backend dry run); null = fall
   // back to the coarser group-level filter until/if the dry run resolves.
   const [applicableKeys, setApplicableKeys] = useState<Set<string> | null>(null);
+  // The block whose edited wording the user is about to promote to a default.
+  const [pendingDefault, setPendingDefault] = useState<TextBlock | null>(null);
+  const [savingDefault, setSavingDefault] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTextBlocks()
@@ -57,6 +62,28 @@ export default function ProposalTextOverrides({ request, overrides, onChange }: 
     return map;
   }, [blocks, applicableKeys, request]);
 
+  const saveAsDefault = async (editorName: string) => {
+    if (!pendingDefault) return;
+    const block = pendingDefault;
+    const content = overrides[block.key] ?? block.content;
+    setSavingDefault(true);
+    setSaveError(null);
+    try {
+      const updated = await updateTextBlock(block.key, content, editorName);
+      // Reflect the new default locally so the editor stops flagging it as changed.
+      setBlocks((prev) => prev.map((b) => (b.key === updated.key ? { ...b, content: updated.content } : b)));
+      // The per-proposal override now equals the default — drop it.
+      const next = { ...overrides };
+      delete next[block.key];
+      onChange(next);
+      setPendingDefault(null);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save default');
+    } finally {
+      setSavingDefault(false);
+    }
+  };
+
   const setOverride = (block: TextBlock, value: string) => {
     const next = { ...overrides };
     if (value === block.content) {
@@ -82,8 +109,9 @@ export default function ProposalTextOverrides({ request, overrides, onChange }: 
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500">
-        Edits here apply to <strong>this proposal only</strong> and are not saved as defaults.
-        Only wording that will appear in this proposal is shown.
+        Edits here apply to <strong>this proposal only</strong>. To make a change stick for every
+        future proposal, use <strong>Save as default</strong> beneath the edited wording. Only
+        wording that will appear in this proposal is shown.
       </p>
       {[...grouped.entries()].map(([group, groupBlocks]) => (
         <CollapsibleSection key={group} title={group} defaultOpen={false}>
@@ -106,12 +134,34 @@ export default function ProposalTextOverrides({ request, overrides, onChange }: 
                     rows={block.kind === 'bullet_list' ? 5 : 3}
                     className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-400 font-mono"
                   />
+                  {changed && (
+                    <div className="mt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setPendingDefault(block)}
+                        className="text-xs text-gray-500 hover:text-gray-900 underline underline-offset-2"
+                      >
+                        Save as default…
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         </CollapsibleSection>
       ))}
+
+      {pendingDefault && (
+        <ConfirmSaveDefaultModal
+          block={pendingDefault}
+          content={overrides[pendingDefault.key] ?? pendingDefault.content}
+          busy={savingDefault}
+          error={saveError}
+          onCancel={() => { setPendingDefault(null); setSaveError(null); }}
+          onConfirm={saveAsDefault}
+        />
+      )}
     </div>
   );
 }
