@@ -11,9 +11,12 @@ interface Props {
   dispatchType: string;
   toggleType: string;
   dispatch: Dispatch<any>;
+  // Optional interceptor for the include toggle. When provided, it is called
+  // instead of dispatching directly, so the parent can e.g. confirm first.
+  onToggle?: () => void;
 }
 
-export default function ServiceRow({ serviceKey, label, config, dispatchType, toggleType, dispatch }: Props) {
+export default function ServiceRow({ serviceKey, label, config, dispatchType, toggleType, dispatch, onToggle }: Props) {
   const hasModels = SERVICES_WITH_MODELS.has(serviceKey);
   const hasExtendedTravel = SERVICES_WITH_EXTENDED_TRAVEL.has(serviceKey);
   const hasHours = SERVICES_WITH_HOURS.has(serviceKey);
@@ -31,7 +34,7 @@ export default function ServiceRow({ serviceKey, label, config, dispatchType, to
         <input
           type="checkbox"
           checked={config.included}
-          onChange={() => dispatch({ type: toggleType, key: serviceKey })}
+          onChange={() => (onToggle ? onToggle() : dispatch({ type: toggleType, key: serviceKey }))}
           className="w-4 h-4 rounded"
         />
       </td>
