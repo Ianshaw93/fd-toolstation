@@ -14,6 +14,7 @@ interface AssistantCard {
   url?: string;
   wip?: boolean;
   liveStatus?: 'cfd';
+  shelved?: boolean; // hidden from the dashboard for now; kept for later
 }
 
 function useCfdStatus() {
@@ -102,12 +103,20 @@ function CfdBadge({ state }: { state: CfdDashboardState | null }) {
 
 const assistants: AssistantCard[] = [
   {
+    id: '7',
+    icon: '🚒',
+    title: 'Search & Rescue Bot',
+    description: 'Search fire emails, reports, and docs across projects',
+    url: 'https://s56p2ggh-3000.uks1.devtunnels.ms/',
+  },
+  {
     id: '6',
     icon: '🖥️',
     title: 'CFD Dashboard',
     description: 'Live FDS simulation status — see what\'s running, progress, and queue',
     url: '/cfd-dashboard',
     liveStatus: 'cfd',
+    shelved: true, // shelved for now — remove this flag to bring it back
   },
   {
     id: '1',
@@ -327,7 +336,7 @@ export default function Home() {
             onScroll={checkScrollability}
             className="flex gap-6 overflow-x-auto scrollbar-hide px-12 pb-4"
           >
-            {assistants.map((assistant) => (
+            {assistants.filter((assistant) => !assistant.shelved).map((assistant) => (
               <div
                 key={assistant.id}
                 className={`relative flex-shrink-0 w-80 bg-white rounded-xl p-6 border border-gray-200 transition-all flex flex-col ${
