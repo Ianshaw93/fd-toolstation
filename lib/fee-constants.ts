@@ -5,9 +5,19 @@ export const MONTHS = [
 
 export const YEARS = Array.from({ length: 17 }, (_, i) => String(2024 + i));
 
-export const COUNTRIES: { value: 'EW' | 'J'; label: string }[] = [
+export const COUNTRIES: { value: import('./fee-types').CountryCode; label: string }[] = [
   { value: 'EW', label: 'England or Wales' },
   { value: 'J', label: 'Jersey' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+// Shown read-only alongside the custom legislation field so the wording of a
+// bespoke reference can be modelled on the built-in ones. Kept in step with
+// LEGISLATION_ENGLAND_WALES / LEGISLATION_JERSEY in the backend's
+// services/fee_calculator.py.
+export const LEGISLATION_REFERENCES: { label: string; text: string }[] = [
+  { label: 'England or Wales', text: 'Building Regulations 2010 (Part B)' },
+  { label: 'Jersey', text: 'Building Bye Laws (Jersey) 2007 (Part 2)' },
 ];
 
 export const SERVICE_LABELS_1_4: Record<string, string> = {
