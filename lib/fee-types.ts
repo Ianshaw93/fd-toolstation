@@ -34,6 +34,9 @@ export interface ProjectDetails {
   // Only used when country is 'OTHER'; England/Wales always attracts VAT and
   // Jersey never does.
   vat_applicable: boolean;
+  // Legislation reference for an 'OTHER' country. Blank falls back to the
+  // England/Wales reference.
+  legislation: string;
 }
 
 export interface FeeOptions {

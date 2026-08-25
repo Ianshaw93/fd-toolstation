@@ -2,7 +2,7 @@
 
 import { Dispatch } from 'react';
 import type { ProjectDetails } from '../../lib/fee-types';
-import { COUNTRIES } from '../../lib/fee-constants';
+import { COUNTRIES, LEGISLATION_REFERENCES } from '../../lib/fee-constants';
 
 interface Props {
   project: ProjectDetails;
@@ -49,6 +49,7 @@ export default function ProjectDetailsSection({ project, dispatch }: Props) {
         </div>
       </div>
       {project.country === 'OTHER' && (
+        <>
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">VAT Applicable</label>
           <div className="flex gap-4">
@@ -72,6 +73,40 @@ export default function ProjectDetailsSection({ project, dispatch }: Props) {
             When Yes, fees in the proposal are quoted exclusive of VAT.
           </p>
         </div>
+        <div className="md:col-span-2">
+          <label htmlFor="legislation" className="block text-sm font-medium text-gray-700 mb-1">
+            Legislation
+          </label>
+          <input
+            id="legislation"
+            type="text"
+            value={project.legislation}
+            placeholder="e.g. Building Bye Laws (Guernsey) 2012"
+            onChange={(e) => dispatch({ type: 'SET_PROJECT', field: 'legislation', value: e.target.value })}
+            className="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+          />
+          <p className="mt-2 text-xs text-gray-500">
+            Quoted throughout the proposal, e.g. &ldquo;complies with the functional requirements
+            of &hellip;&rdquo;. Left blank, the England or Wales reference is used. For reference:
+          </p>
+          <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+            {LEGISLATION_REFERENCES.map((ref) => (
+              <div key={ref.label}>
+                <label htmlFor={`legislation-ref-${ref.label}`} className="block text-xs text-gray-500 mb-1">
+                  {ref.label}
+                </label>
+                <input
+                  id={`legislation-ref-${ref.label}`}
+                  type="text"
+                  readOnly
+                  value={ref.text}
+                  className="w-full px-4 py-2 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-600"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+        </>
       )}
     </div>
   );

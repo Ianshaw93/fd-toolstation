@@ -45,7 +45,7 @@ const DESIGN_STAGE_KEYS: ServiceKey1to4[] = [
 function initialState(): FeeProposalState {
   return {
     client: { first_name: '', surname: '', address_lines: ['', '', '', '', '', ''] },
-    project: { project_name: '', project_location: '', country: 'EW', vat_applicable: true },
+    project: { project_name: '', project_location: '', country: 'EW', vat_applicable: true, legislation: '' },
     fee_options: { engineer_name: '', pii_limit: 100000, include_hourly_rates: false },
     design_stages_1_4: {
       stage_1: defaultServiceConfig(),
@@ -84,10 +84,11 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
     case 'SET_PROJECT': {
       if (action.field === 'country') {
         const country = action.value as CountryCode;
-        // VAT is fixed for England/Wales and Jersey; for 'Other' the user
-        // states it, starting from no VAT.
+        // VAT and legislation are fixed for England/Wales and Jersey; for
+        // 'Other' the user states them, starting from no VAT.
         const vat_applicable = country === 'EW';
-        return { ...state, project: { ...state.project, country, vat_applicable } };
+        const legislation = country === 'OTHER' ? state.project.legislation : '';
+        return { ...state, project: { ...state.project, country, vat_applicable, legislation } };
       }
       return { ...state, project: { ...state.project, [action.field]: action.value } };
     }

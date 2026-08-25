@@ -11,6 +11,15 @@ export const COUNTRIES: { value: import('./fee-types').CountryCode; label: strin
   { value: 'OTHER', label: 'Other' },
 ];
 
+// Shown read-only alongside the custom legislation field so the wording of a
+// bespoke reference can be modelled on the built-in ones. Kept in step with
+// LEGISLATION_ENGLAND_WALES / LEGISLATION_JERSEY in the backend's
+// services/fee_calculator.py.
+export const LEGISLATION_REFERENCES: { label: string; text: string }[] = [
+  { label: 'England or Wales', text: 'Building Regulations 2010 (Part B)' },
+  { label: 'Jersey', text: 'Building Bye Laws (Jersey) 2007 (Part 2)' },
+];
+
 export const SERVICE_LABELS_1_4: Record<string, string> = {
   stage_1: 'RIBA Stage 1',
   stage_2: 'RIBA Stage 2',
