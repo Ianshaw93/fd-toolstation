@@ -3,6 +3,7 @@
 import { useReducer, useMemo } from 'react';
 import type {
   ClientDetails,
+  CountryCode,
   ProjectDetails,
   FeeOptions,
   DesignStagesRiba1to4,
@@ -27,7 +28,7 @@ interface FeeProposalState {
 
 type Action =
   | { type: 'SET_CLIENT'; field: keyof ClientDetails; value: string | string[] }
-  | { type: 'SET_PROJECT'; field: keyof ProjectDetails; value: string }
+  | { type: 'SET_PROJECT'; field: keyof ProjectDetails; value: string | boolean }
   | { type: 'SET_FEE_OPTIONS'; field: keyof FeeOptions; value: string | number | boolean }
   | { type: 'SET_SERVICE_1_4'; key: ServiceKey1to4; field: keyof ServiceConfig; value: boolean | number | string | null }
   | { type: 'SET_SERVICE_5'; key: ServiceKey5; field: keyof ServiceConfig; value: boolean | number | string | null }
@@ -44,7 +45,7 @@ const DESIGN_STAGE_KEYS: ServiceKey1to4[] = [
 function initialState(): FeeProposalState {
   return {
     client: { first_name: '', surname: '', address_lines: ['', '', '', '', '', ''] },
-    project: { project_name: '', project_location: '', country: 'EW' },
+    project: { project_name: '', project_location: '', country: 'EW', vat_applicable: true },
     fee_options: { engineer_name: '', pii_limit: 100000, include_hourly_rates: false },
     design_stages_1_4: {
       stage_1: defaultServiceConfig(),
@@ -80,8 +81,16 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
     case 'SET_CLIENT':
       return { ...state, client: { ...state.client, [action.field]: action.value } };
 
-    case 'SET_PROJECT':
+    case 'SET_PROJECT': {
+      if (action.field === 'country') {
+        const country = action.value as CountryCode;
+        // VAT is fixed for England/Wales and Jersey; for 'Other' the user
+        // states it, starting from no VAT.
+        const vat_applicable = country === 'EW';
+        return { ...state, project: { ...state.project, country, vat_applicable } };
+      }
       return { ...state, project: { ...state.project, [action.field]: action.value } };
+    }
 
     case 'SET_FEE_OPTIONS':
       return { ...state, fee_options: { ...state.fee_options, [action.field]: action.value } };

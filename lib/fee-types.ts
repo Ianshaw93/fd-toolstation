@@ -25,10 +25,15 @@ export interface ClientDetails {
   address_lines: string[];
 }
 
+export type CountryCode = 'EW' | 'J' | 'OTHER';
+
 export interface ProjectDetails {
   project_name: string;
   project_location: string;
-  country: 'EW' | 'J';
+  country: CountryCode;
+  // Only used when country is 'OTHER'; England/Wales always attracts VAT and
+  // Jersey never does.
+  vat_applicable: boolean;
 }
 
 export interface FeeOptions {

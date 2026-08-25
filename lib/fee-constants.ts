@@ -5,9 +5,10 @@ export const MONTHS = [
 
 export const YEARS = Array.from({ length: 17 }, (_, i) => String(2024 + i));
 
-export const COUNTRIES: { value: 'EW' | 'J'; label: string }[] = [
+export const COUNTRIES: { value: import('./fee-types').CountryCode; label: string }[] = [
   { value: 'EW', label: 'England or Wales' },
   { value: 'J', label: 'Jersey' },
+  { value: 'OTHER', label: 'Other' },
 ];
 
 export const SERVICE_LABELS_1_4: Record<string, string> = {
