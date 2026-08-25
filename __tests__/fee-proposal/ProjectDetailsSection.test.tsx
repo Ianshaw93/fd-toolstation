@@ -49,8 +49,8 @@ describe('ProjectDetailsSection country and VAT', () => {
   });
 
   it('shows the legislation field with both built-in references when Other is selected', () => {
-    renderSection({ country: 'OTHER', legislation: 'Building Bye Laws (Guernsey) 2012' });
-    expect(screen.getByLabelText('Legislation')).toHaveValue('Building Bye Laws (Guernsey) 2012');
+    renderSection({ country: 'OTHER', legislation: 'Test Legislation Reference' });
+    expect(screen.getByLabelText('Legislation')).toHaveValue('Test Legislation Reference');
     expect(screen.getByLabelText('England or Wales', { selector: 'input[readonly]' }))
       .toHaveValue('Building Regulations 2010 (Part B)');
     expect(screen.getByLabelText('Jersey', { selector: 'input[readonly]' }))
@@ -59,8 +59,8 @@ describe('ProjectDetailsSection country and VAT', () => {
 
   it('dispatches the legislation text', () => {
     const { dispatch } = renderSection({ country: 'OTHER' });
-    fireEvent.change(screen.getByLabelText('Legislation'), { target: { value: 'Guernsey Bye Laws' } });
-    expect(dispatch).toHaveBeenCalledWith({ type: 'SET_PROJECT', field: 'legislation', value: 'Guernsey Bye Laws' });
+    fireEvent.change(screen.getByLabelText('Legislation'), { target: { value: 'Test Legislation Reference' } });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'SET_PROJECT', field: 'legislation', value: 'Test Legislation Reference' });
   });
 
   it('dispatches the VAT selection', () => {
@@ -95,8 +95,8 @@ describe('useFeeProposal country/VAT state', () => {
   it('clears a typed legislation when leaving Other', () => {
     const { result } = renderHook(() => useFeeProposal());
     act(() => result.current.dispatch({ type: 'SET_PROJECT', field: 'country', value: 'OTHER' }));
-    act(() => result.current.dispatch({ type: 'SET_PROJECT', field: 'legislation', value: 'Guernsey Bye Laws' }));
-    expect(result.current.state.project.legislation).toBe('Guernsey Bye Laws');
+    act(() => result.current.dispatch({ type: 'SET_PROJECT', field: 'legislation', value: 'Test Legislation Reference' }));
+    expect(result.current.state.project.legislation).toBe('Test Legislation Reference');
     act(() => result.current.dispatch({ type: 'SET_PROJECT', field: 'country', value: 'EW' }));
     expect(result.current.state.project.legislation).toBe('');
   });
@@ -113,7 +113,7 @@ describe('useFeeProposal country/VAT state', () => {
   it('sends the custom legislation for Other in the generated request', () => {
     const { result } = renderHook(() => useFeeProposal());
     act(() => result.current.dispatch({ type: 'SET_PROJECT', field: 'country', value: 'OTHER' }));
-    act(() => result.current.dispatch({ type: 'SET_PROJECT', field: 'legislation', value: 'Building Bye Laws (Guernsey) 2012' }));
-    expect(result.current.buildRequest().project.legislation).toBe('Building Bye Laws (Guernsey) 2012');
+    act(() => result.current.dispatch({ type: 'SET_PROJECT', field: 'legislation', value: 'Test Legislation Reference' }));
+    expect(result.current.buildRequest().project.legislation).toBe('Test Legislation Reference');
   });
 });
