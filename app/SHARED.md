@@ -44,12 +44,13 @@ useEffect(() => {
 ### Used in
 - `components/fee-proposal/FeeOptionsSection.tsx` (fee proposal tool)
 - `components/efs/ProjectDetailsSection.tsx` (fire strategy tool)
+- `components/warehouse-smoke/SmokeLayerForm.tsx` (warehouse smoke layer tool)
 
 ## Shared Components
 
 | Component | Path | Description |
 |-----------|------|-------------|
-| `CollapsibleSection` | `components/fee-proposal/CollapsibleSection.tsx` | Expandable/collapsible panel used across both fee-proposal and EFS tools |
+| `CollapsibleSection` | `components/fee-proposal/CollapsibleSection.tsx` | Expandable/collapsible panel used across the fee-proposal, EFS and warehouse smoke layer tools |
 
 ## Backend
 
