@@ -153,6 +153,13 @@ const assistants: AssistantCard[] = [
     description: 'BRE 135 external fire spread assessment for building elevations',
     url: '/external-firespread',
   },
+  {
+    id: '8',
+    icon: '🏭',
+    title: 'Warehouse Smoke Layer',
+    description: 'Smoke layer descent and ASET/RSET assessment for a base warehouse',
+    url: '/warehouse-smoke',
+  },
 ];
 
 export default function Home() {
