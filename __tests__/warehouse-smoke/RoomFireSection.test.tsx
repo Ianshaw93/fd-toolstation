@@ -37,6 +37,36 @@ describe('RoomFireSection', () => {
     expect(screen.getByLabelText(/Growth rate coefficient/)).toBeInTheDocument();
   });
 
+  it('reveals the coefficient field when Custom is chosen from a standard rate', async () => {
+    // Regression: selecting Custom used to be a dead end, because the value
+    // still matched a standard rate so the field stayed hidden.
+    const user = userEvent.setup();
+    setup();
+    expect(screen.queryByLabelText(/Growth rate coefficient/)).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Fire growth rate'), 'custom');
+
+    expect(screen.getByLabelText(/Growth rate coefficient/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Fire growth rate')).toHaveValue('custom');
+  });
+
+  it('lets a custom coefficient be typed in and reported', async () => {
+    const user = userEvent.setup();
+    const { onChange } = setup();
+    await user.selectOptions(screen.getByLabelText('Fire growth rate'), 'custom');
+    await user.type(screen.getByLabelText(/Growth rate coefficient/), '5');
+    expect(onChange).toHaveBeenCalledWith('fgr', '0.1885');
+  });
+
+  it('goes back to a standard rate when one is chosen again', async () => {
+    const user = userEvent.setup();
+    const { onChange } = setup();
+    await user.selectOptions(screen.getByLabelText('Fire growth rate'), 'custom');
+    await user.selectOptions(screen.getByLabelText('Fire growth rate'), '0.0117');
+    expect(onChange).toHaveBeenCalledWith('fgr', '0.0117');
+    expect(screen.queryByLabelText(/Growth rate coefficient/)).not.toBeInTheDocument();
+  });
+
   it('reports edits to the floor area', async () => {
     const { onChange } = setup();
     await userEvent.type(screen.getByLabelText(/Floor area/), '5');

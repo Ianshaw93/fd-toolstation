@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import NumberField from './NumberField';
 import { FIRE_GROWTH_RATES } from '../../lib/smoke-layer-types';
 import type { SmokeLayerFormState } from '../../lib/smoke-layer-form';
@@ -15,6 +17,11 @@ const selectClass =
 
 export default function RoomFireSection({ form, onChange, invalid }: RoomFireSectionProps) {
   const matchedGrowthRate = FIRE_GROWTH_RATES.find((r) => String(r.value) === form.fgr);
+  // Choosing "Custom" has to stick even while the value still equals a standard
+  // rate, otherwise the dropdown would snap straight back and the coefficient
+  // field could never be reached.
+  const [customGrowthRate, setCustomGrowthRate] = useState(!matchedGrowthRate);
+  const showCustomGrowthRate = customGrowthRate || !matchedGrowthRate;
 
   const area = Number(form.roomArea);
   const racking = Number(form.rackingPerc);
@@ -65,8 +72,9 @@ export default function RoomFireSection({ form, onChange, invalid }: RoomFireSec
         </label>
         <select
           id="growth-rate"
-          value={matchedGrowthRate ? String(matchedGrowthRate.value) : 'custom'}
+          value={showCustomGrowthRate ? 'custom' : String(matchedGrowthRate!.value)}
           onChange={(e) => {
+            setCustomGrowthRate(e.target.value === 'custom');
             if (e.target.value !== 'custom') onChange('fgr', e.target.value);
           }}
           className={selectClass}
@@ -78,7 +86,7 @@ export default function RoomFireSection({ form, onChange, invalid }: RoomFireSec
           ))}
           <option value="custom">Custom</option>
         </select>
-        {!matchedGrowthRate && (
+        {showCustomGrowthRate && (
           <div className="mt-2">
             <NumberField
               label="Growth rate coefficient"
@@ -91,9 +99,9 @@ export default function RoomFireSection({ form, onChange, invalid }: RoomFireSec
             />
           </div>
         )}
-        {matchedGrowthRate && (
+        {!showCustomGrowthRate && (
           <p className="text-xs text-gray-500 mt-1">
-            t-squared growth, Q = {matchedGrowthRate.value}t². 70% of the heat release is taken as
+            t-squared growth, Q = {matchedGrowthRate!.value}t². 70% of the heat release is taken as
             convective.
           </p>
         )}
