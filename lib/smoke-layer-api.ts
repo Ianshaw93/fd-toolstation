@@ -10,6 +10,7 @@
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://backendfornextapp-production.up.railway.app';
 
+import type { ReportDetails } from './smoke-layer-report';
 import type { SavedRun, SmokeLayerInputs, SmokeLayerResults } from './smoke-layer-types';
 
 export interface ReportRequest {
@@ -17,6 +18,8 @@ export interface ReportRequest {
   engineer_name: string;
   inputs: SmokeLayerInputs;
   results: SmokeLayerResults;
+  /** Wording inputs; optional so older callers still get a report with prompts. */
+  details?: ReportDetails;
 }
 
 async function failure(res: Response, fallback: string): Promise<never> {

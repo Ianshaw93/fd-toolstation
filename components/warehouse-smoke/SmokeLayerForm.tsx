@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import CollapsibleSection from '../fee-proposal/CollapsibleSection';
 import AssessmentSection from './AssessmentSection';
 import EscapeSection from './EscapeSection';
+import ReportDetailsSection from './ReportDetailsSection';
 import ResultsSummary from './ResultsSummary';
 import RoomFireSection from './RoomFireSection';
 import SavedRunsBar from './SavedRunsBar';
@@ -14,6 +15,11 @@ import { fetchEngineers } from '../../lib/fee-api';
 import type { Engineer } from '../../lib/fee-types';
 import { calculateSmokeLayer } from '../../lib/smoke-layer-calc';
 import { generateSmokeLayerReport } from '../../lib/smoke-layer-api';
+import {
+  DEFAULT_REPORT_DETAILS,
+  toReportDetails,
+  type ReportDetailsForm,
+} from '../../lib/smoke-layer-report';
 import {
   DEFAULT_FORM,
   FIELD_LABELS,
@@ -35,6 +41,7 @@ export default function SmokeLayerForm() {
   const [form, setForm] = useState<SmokeLayerFormState>(DEFAULT_FORM);
   const [projectName, setProjectName] = useState('');
   const [engineerName, setEngineerName] = useState('');
+  const [reportDetails, setReportDetails] = useState<ReportDetailsForm>(DEFAULT_REPORT_DETAILS);
   const [engineers, setEngineers] = useState<Engineer[]>([]);
   const [reportError, setReportError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -47,6 +54,9 @@ export default function SmokeLayerForm() {
 
   const handleChange = (field: keyof SmokeLayerFormState, value: string) =>
     setForm((current) => ({ ...current, [field]: value }));
+
+  const handleDetailsChange = <K extends keyof ReportDetailsForm>(field: K, value: ReportDetailsForm[K]) =>
+    setReportDetails((current) => ({ ...current, [field]: value }));
 
   // The model is cheap, so it re-runs on every keystroke rather than behind a
   // Calculate button — the charts track the inputs directly.
@@ -80,6 +90,7 @@ export default function SmokeLayerForm() {
         engineer_name: engineerName,
         inputs: outcome.inputs,
         results: outcome.results,
+        details: toReportDetails(reportDetails),
       });
     } catch (e) {
       setReportError(e instanceof Error ? e.message : 'Failed to generate report');
@@ -137,6 +148,14 @@ export default function SmokeLayerForm() {
 
         <CollapsibleSection title="Assessment" defaultOpen={false}>
           <AssessmentSection form={form} onChange={handleChange} invalid={invalidFields} />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Report details" defaultOpen={false}>
+          <p className="text-xs text-gray-500 mb-4">
+            Wording for the Word report only. Anything left blank becomes a highlighted prompt in
+            the document.
+          </p>
+          <ReportDetailsSection details={reportDetails} onChange={handleDetailsChange} />
         </CollapsibleSection>
       </div>
 
