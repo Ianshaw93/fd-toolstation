@@ -34,7 +34,7 @@ Single-zone plume model integrated explicitly at `tstep`:
 Constants are fixed at 20 °C / 293 K ambient: `E = 0.2`, `g = 9.81`, `ρ∞ = 1.195 kg/m³`,
 `cp = 1.016 kJ/kg/K`, convective fraction `0.7`.
 
-ASET is the time the layer reaches 2 m; the run then continues 30 s further so the charts show the
+ASET is the time the layer reaches the tenability height (2 m head height by default, CIBSE Guide E); the run then continues 30 s further so the charts show the
 layer still descending. RSET is detection + pre-movement + travel + queuing.
 
 Reported temperatures subtract 273 (not 273.15), matching the original script.
@@ -48,7 +48,7 @@ implementation of the loop in Python purely for the report would invite exactly 
 
 The Python script remains the reference implementation:
 `__tests__/warehouse-smoke/smoke-layer-calc.test.ts` asserts against values produced by running the
-original loop unchanged, to 1e-10, across three regimes (2 m never breached, fast ASET, nothing
+original loop unchanged (with Kathryn's 3 Sep 2026 ASET rule spliced in), to 1e-10, across three regimes (tenability height never breached, fast ASET, nothing
 breached at all).
 
 ## Known issues in the original script

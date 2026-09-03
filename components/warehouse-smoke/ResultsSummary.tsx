@@ -1,12 +1,12 @@
 'use client';
 
-import { TENABILITY_HEIGHT } from '../../lib/smoke-layer-types';
 import type { SmokeLayerResults } from '../../lib/smoke-layer-types';
 
 interface ResultsSummaryProps {
   results: SmokeLayerResults;
   assessmentTime: number;
-  referenceHeight: number;
+  /** Clear height that defines ASET (m). */
+  tenabilityHeight: number;
 }
 
 function seconds(value: number): string {
@@ -23,13 +23,10 @@ function StatTile({ label, value, note }: { label: string; value: string; note?:
   );
 }
 
-export default function ResultsSummary({
-  results,
-  assessmentTime,
-  referenceHeight,
-}: ResultsSummaryProps) {
-  const { rset, aset, asetTriggered, marginOfSafety, referenceHeightBreached, breachTime } = results;
+export default function ResultsSummary({ results, assessmentTime, tenabilityHeight }: ResultsSummaryProps) {
+  const { rset, aset, asetTriggered, marginOfSafety } = results;
   const safe = marginOfSafety > 0;
+  const lastTime = results.steps.length ? results.steps[results.steps.length - 1].time : 0;
 
   return (
     <section aria-label="Results summary">
@@ -66,7 +63,7 @@ export default function ResultsSummary({
         <p className="text-sm text-gray-700 mt-3">
           {asetTriggered ? (
             <>
-              The smoke layer reaches the {TENABILITY_HEIGHT} m tenability limit at{' '}
+              The smoke layer reaches the {tenabilityHeight} m tenability height at{' '}
               <strong>{seconds(aset)}</strong>.{' '}
               {safe ? (
                 <>Occupants are clear {seconds(marginOfSafety)} earlier.</>
@@ -79,7 +76,7 @@ export default function ResultsSummary({
             </>
           ) : (
             <>
-              The smoke layer does not reach {TENABILITY_HEIGHT} m within the{' '}
+              The smoke layer does not reach the {tenabilityHeight} m tenability height within the{' '}
               {seconds(assessmentTime)} assessment period — it settles at{' '}
               <strong>{results.finalClearHeight.toFixed(2)} m</strong>. The margin of safety is at
               least {seconds(marginOfSafety)}.
@@ -92,18 +89,18 @@ export default function ResultsSummary({
         <StatTile
           label="ASET"
           value={asetTriggered ? seconds(aset) : `> ${seconds(assessmentTime)}`}
-          note={asetTriggered ? `Layer at ${TENABILITY_HEIGHT} m` : 'Never breached'}
+          note={asetTriggered ? `Layer at ${tenabilityHeight} m` : 'Never breached'}
         />
         <StatTile label="RSET" value={seconds(rset)} note={`${seconds(results.queueTime)} queuing`} />
         <StatTile
-          label="Final clear height"
-          value={`${results.finalClearHeight.toFixed(2)} m`}
-          note={`From ${seconds(results.steps.length ? results.steps[results.steps.length - 1].time : 0)}`}
+          label="Pre-evacuation time"
+          value={seconds(results.totalPreEvac)}
+          note="Detection + pre-movement + travel"
         />
         <StatTile
-          label={`Reference height (${referenceHeight} m)`}
-          value={referenceHeightBreached && breachTime !== null ? seconds(breachTime) : 'Not breached'}
-          note={referenceHeightBreached ? 'Layer descends past it' : 'Within assessment time'}
+          label="Final clear height"
+          value={`${results.finalClearHeight.toFixed(2)} m`}
+          note={`At ${seconds(lastTime)}`}
         />
       </div>
     </section>

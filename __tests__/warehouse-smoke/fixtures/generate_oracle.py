@@ -4,6 +4,19 @@ The point of this file is that it does not retype the physics. It loads the
 Dropbox script verbatim, substitutes only the user-input assignments, truncates
 at the plotting section, and execs the remaining original text. Every arithmetic
 line the oracle runs is the author's, not a transcription of it.
+
+Two source files are combined, both from Dropbox
+(07 Technical Tools/1. Internal/Base Warehouse Smoke Depth/):
+
+- warehouse_smoke_layer.py (27 Aug 2026) provides the loop. It still carries
+  the old two-height logic (a fixed 2 m ASET plus a tracked reference height).
+- WebApp Files/warehouse_smoke_layer_func.py (3 Sep 2026) provides the ASET
+  rule: ASET triggers when the layer reaches reference_height, which is the one
+  and only tenability height. Its block between the comment lines
+  "# check if reference height has been breached" and "# save results to lists"
+  is spliced into the standalone loop in place of the old block. Both files use
+  those exact comment lines. The func file cannot be run on its own because its
+  zone_model hard-codes a 1 s timestep and the cases below include sub-second ones.
 """
 import gzip
 import json
@@ -19,7 +32,14 @@ SRC = Path(
     os.environ.get("SMOKE_LAYER_SRC")
     or (Path(__file__).resolve().parent / "warehouse_smoke_layer.py")
 )
+# The web-app function file with the 3 Sep ASET rule (see module docstring).
+FUNC_SRC = Path(
+    os.environ.get("SMOKE_LAYER_FUNC_SRC")
+    or (Path(__file__).resolve().parent / "warehouse_smoke_layer_func.py")
+)
 CUT = "time = np.arange(tstep, t, tstep)"
+ASET_BLOCK_START = "# check if reference height has been breached"
+ASET_BLOCK_END = "# save results to lists"
 
 # Names the script assigns as bare numeric literals at module level.
 INPUT_NAMES = [
@@ -40,6 +60,33 @@ def prepare(source: str) -> str:
     head = re.sub(r"^from plotnine import \([^)]*\)\s*$", "", head, flags=re.M)
     head = re.sub(r"^import (numpy as np|pandas as pd)\s*$", "", head, flags=re.M)
     return head
+
+
+def _block(source: str, indent: int) -> str:
+    """The ASET block of `source` (between the two marker comments), re-indented."""
+    start = source.index(ASET_BLOCK_START)
+    end = source.index(ASET_BLOCK_END, start)
+    lines = source[start:end].splitlines()
+    out = []
+    for line in lines:
+        if line.strip() == "":
+            out.append("")
+            continue
+        stripped = line[indent:] if line[:indent].strip() == "" else line.lstrip()
+        out.append(stripped)
+    return "\n".join(out)
+
+
+def splice_aset_rule(source: str, func_source: str) -> str:
+    """Replace the standalone script's ASET block with the func file's."""
+    start = source.index(ASET_BLOCK_START)
+    end = source.index(ASET_BLOCK_END, start)
+    # Indentation of the standalone block (module-level loop body, 4 spaces).
+    line_start = source.rfind("\n", 0, start) + 1
+    indent = start - line_start
+    new_block = _block(func_source, 8)  # the func file's loop sits inside a def
+    new_block = "\n".join((" " * indent + l) if l else l for l in new_block.splitlines())
+    return source[:line_start] + new_block + "\n" + " " * indent + source[end:]
 
 
 def substitute(source: str, values: dict) -> str:
@@ -68,7 +115,8 @@ def substitute(source: str, values: dict) -> str:
 
 
 def run(values: dict) -> dict:
-    code = substitute(prepare(SRC.read_text(encoding="utf-8")), values)
+    code = splice_aset_rule(prepare(SRC.read_text(encoding="utf-8")), FUNC_SRC.read_text(encoding="utf-8"))
+    code = substitute(code, values)
     ns = {"__name__": "__oracle__"}
     exec(compile(code, str(SRC), "exec"), ns)  # noqa: S102 - deliberate
 
@@ -76,8 +124,6 @@ def run(values: dict) -> dict:
         "rset": ns["rset"],
         "aset": ns["aset"],
         "asetTriggered": ns["aset_triggered"],
-        "breachTime": ns["breach_time"] if ns["reference_height_breached"] else None,
-        "referenceHeightBreached": ns["reference_height_breached"],
         "finalClearHeight": ns["z_list"][-1],
         "totalPreEvac": ns["total_pre_evac"],
         "peoplePerSecond": ns["people_per_second"],
@@ -162,7 +208,11 @@ if __name__ == "__main__":
         raise SystemExit(
             "source script not found at %s - set SMOKE_LAYER_SRC to a local copy" % SRC
         )
-    out = {"_source": SRC.name, "cases": {}, "inputs": {}}
+    if not FUNC_SRC.exists():
+        raise SystemExit(
+            "web-app function file not found at %s - set SMOKE_LAYER_FUNC_SRC to a local copy" % FUNC_SRC
+        )
+    out = {"_source": SRC.name, "_aset_rule_source": FUNC_SRC.name, "cases": {}, "inputs": {}}
     for name, values in CASES.items():
         out["cases"][name] = run(values)
         out["inputs"][name] = values

@@ -3,19 +3,19 @@
 import { useEffect, useState } from 'react';
 
 import { deleteRun, listSavedRuns, saveRun } from '../../lib/smoke-layer-api';
-import type { SavedRun, SmokeLayerInputs } from '../../lib/smoke-layer-types';
+import { loadDocument, type SmokeLayerDocument } from '../../lib/smoke-layer-project';
+import type { SavedRun } from '../../lib/smoke-layer-types';
 
 interface SavedRunsBarProps {
-  /** Current inputs, or null while the form is incomplete. */
-  inputs: SmokeLayerInputs | null;
-  projectName: string;
-  onLoad: (run: SavedRun) => void;
+  /** The whole form, saved as typed — a part-filled document can be saved and finished later. */
+  document: SmokeLayerDocument;
+  onLoad: (document: SmokeLayerDocument) => void;
 }
 
 const controlClass =
   'px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent';
 
-export default function SavedRunsBar({ inputs, projectName, onLoad }: SavedRunsBarProps) {
+export default function SavedRunsBar({ document, onLoad }: SavedRunsBarProps) {
   const [runs, setRuns] = useState<SavedRun[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [name, setName] = useState('');
@@ -30,11 +30,11 @@ export default function SavedRunsBar({ inputs, projectName, onLoad }: SavedRunsB
   }, []);
 
   async function handleSave() {
-    if (!inputs || !name.trim()) return;
+    if (!name.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      const saved = await saveRun(name.trim(), projectName, inputs);
+      const saved = await saveRun(name.trim(), document.project.projectName, document);
       setRuns((current) => [saved, ...current.filter((r) => r.id !== saved.id)]);
       setSelectedId(saved.id);
       setName('');
@@ -47,7 +47,13 @@ export default function SavedRunsBar({ inputs, projectName, onLoad }: SavedRunsB
 
   function handleLoad() {
     const run = runs.find((r) => r.id === selectedId);
-    if (run) onLoad(run);
+    if (!run) return;
+    setError(null);
+    try {
+      onLoad(loadDocument(run.inputs));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
+    }
   }
 
   async function handleDelete() {
@@ -117,14 +123,14 @@ export default function SavedRunsBar({ inputs, projectName, onLoad }: SavedRunsB
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Unit 6 — 33% racking"
+            placeholder="e.g. Shed Zone — three units"
             className={`${controlClass} w-full`}
           />
         </div>
         <button
           type="button"
           onClick={handleSave}
-          disabled={!inputs || !name.trim() || busy}
+          disabled={!name.trim() || busy}
           className="px-4 py-2 rounded-lg bg-black hover:bg-gray-800 text-sm text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           Save

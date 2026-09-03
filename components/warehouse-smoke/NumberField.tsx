@@ -4,6 +4,8 @@ interface NumberFieldProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  /** Element id; defaults to one derived from the label. Pass one when the same label repeats on a page. */
+  id?: string;
   /** Shown after the input, e.g. "m²". */
   unit?: string;
   /** Small note under the field — guidance, a default, or a derived value. */
@@ -21,6 +23,7 @@ export default function NumberField({
   label,
   value,
   onChange,
+  id,
   unit,
   hint,
   step,
@@ -28,16 +31,16 @@ export default function NumberField({
   max,
   invalid = false,
 }: NumberFieldProps) {
-  const id = `field-${label.replace(/\s+/g, '-').toLowerCase()}`;
+  const fieldId = id ?? `field-${label.replace(/\s+/g, '-').toLowerCase()}`;
 
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">
+      <label htmlFor={fieldId} className="block text-sm font-medium text-gray-700 mb-1">
         {label}
         {unit && <span className="text-gray-400 font-normal"> ({unit})</span>}
       </label>
       <input
-        id={id}
+        id={fieldId}
         type="number"
         inputMode="decimal"
         value={value}

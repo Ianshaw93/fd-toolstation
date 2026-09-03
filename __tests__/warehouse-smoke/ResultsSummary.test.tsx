@@ -17,7 +17,7 @@ const PROJECT_SHED: SmokeLayerInputs = {
   flowRate: 1.33,
   occupancy: 1431,
   assessmentTime: 1200,
-  referenceHeight: 5.3,
+  tenabilityHeight: 5.3,
   tstep: 1,
 };
 
@@ -28,15 +28,13 @@ const TIGHT_SHAFT: SmokeLayerInputs = {
   maximumTravelDistance: 2.5,
   totalExitWidth: 1,
   occupancy: 1,
-  referenceHeight: 2,
+  tenabilityHeight: 2,
 };
 
-describe('ResultsSummary — tenability maintained', () => {
+describe('ResultsSummary — tenability maintained, ASET reached', () => {
   beforeEach(() => {
     const results = calculateSmokeLayer(PROJECT_SHED);
-    render(
-      <ResultsSummary results={results} assessmentTime={1200} referenceHeight={5.3} />,
-    );
+    render(<ResultsSummary results={results} assessmentTime={1200} tenabilityHeight={5.3} />);
   });
 
   it('leads with the verdict', () => {
@@ -44,7 +42,30 @@ describe('ResultsSummary — tenability maintained', () => {
   });
 
   it('shows the margin of safety as the hero figure', () => {
-    expect(screen.getByText('+800')).toBeInTheDocument();
+    expect(screen.getByText('+797')).toBeInTheDocument();
+  });
+
+  it('names the tenability height it assessed', () => {
+    expect(screen.getByText(/reaches the 5\.3 m tenability height at/)).toBeInTheDocument();
+    expect(screen.getByText('Layer at 5.3 m')).toBeInTheDocument();
+  });
+
+  it('shows the ASET tile and the pre-evacuation time', () => {
+    // Once in the sentence, once in the ASET tile.
+    expect(screen.getAllByText('1,197 s')).toHaveLength(2);
+    expect(screen.getByText('Pre-evacuation time')).toBeInTheDocument();
+    expect(screen.getByText('336 s')).toBeInTheDocument();
+  });
+
+  it('does not mention a reference height', () => {
+    expect(screen.queryByText(/reference/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('ResultsSummary — tenability never reached', () => {
+  beforeEach(() => {
+    const results = calculateSmokeLayer({ ...PROJECT_SHED, tenabilityHeight: 2 });
+    render(<ResultsSummary results={results} assessmentTime={1200} tenabilityHeight={2} />);
   });
 
   it('says ASET was never reached rather than showing the placeholder', () => {
@@ -52,16 +73,17 @@ describe('ResultsSummary — tenability maintained', () => {
     expect(screen.getByText('> 1,200 s')).toBeInTheDocument();
   });
 
-  it('reports the reference height breach time', () => {
-    expect(screen.getByText('Reference height (5.3 m)')).toBeInTheDocument();
-    expect(screen.getByText('1,197 s')).toBeInTheDocument();
+  it('reports the margin as a lower bound', () => {
+    expect(screen.getByText('+800')).toBeInTheDocument();
+    expect(screen.getByText(/seconds margin of safety \(at least\)/)).toBeInTheDocument();
+    expect(screen.getByText(/does not reach the 2 m tenability height/)).toBeInTheDocument();
   });
 });
 
 describe('ResultsSummary — tenability exceeded', () => {
   beforeEach(() => {
     const results = calculateSmokeLayer(TIGHT_SHAFT);
-    render(<ResultsSummary results={results} assessmentTime={1200} referenceHeight={2} />);
+    render(<ResultsSummary results={results} assessmentTime={1200} tenabilityHeight={2} />);
   });
 
   it('flags that the limits are exceeded', () => {

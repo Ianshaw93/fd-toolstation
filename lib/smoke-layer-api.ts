@@ -10,23 +10,17 @@
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://backendfornextapp-production.up.railway.app';
 
-import type { ReportDetails } from './smoke-layer-report';
-import type { SavedRun, SmokeLayerInputs, SmokeLayerResults } from './smoke-layer-types';
+import type { ReportRequest, SmokeLayerDocument } from './smoke-layer-project';
+import type { SavedRun } from './smoke-layer-types';
 
-export interface ReportRequest {
-  project_name: string;
-  engineer_name: string;
-  inputs: SmokeLayerInputs;
-  results: SmokeLayerResults;
-  /** Wording inputs; optional so older callers still get a report with prompts. */
-  details?: ReportDetails;
-}
+export type { ReportRequest } from './smoke-layer-project';
 
 async function failure(res: Response, fallback: string): Promise<never> {
   const body = await res.json().catch(() => ({ detail: fallback }));
   throw new Error(body.detail || fallback);
 }
 
+/** POST the project and its buildings; one building gives the single-building report. */
 export async function generateSmokeLayerReport(data: ReportRequest): Promise<void> {
   const res = await fetch(`${API_URL}/smoke-layer/report`, {
     method: 'POST',
@@ -54,15 +48,16 @@ export async function listSavedRuns(): Promise<SavedRun[]> {
   return res.json();
 }
 
+/** Save the whole form document (project, shared assumptions, buildings) under a name. */
 export async function saveRun(
   name: string,
   projectName: string,
-  inputs: SmokeLayerInputs,
+  document: SmokeLayerDocument,
 ): Promise<SavedRun> {
   const res = await fetch(`${API_URL}/smoke-layer/runs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, project_name: projectName, inputs }),
+    body: JSON.stringify({ name, project_name: projectName, inputs: document }),
   });
   if (!res.ok) await failure(res, 'Failed to save');
   return res.json();

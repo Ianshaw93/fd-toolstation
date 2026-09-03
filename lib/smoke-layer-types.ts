@@ -32,8 +32,8 @@ export const ZONE_CONSTANTS = {
   maxPlumeRiseK: 900,
 } as const;
 
-/** Tenability limit — the clear height defining ASET. */
-export const TENABILITY_HEIGHT = 2;
+/** Default tenability height (m) — the clear height defining ASET (CIBSE Guide E head height). */
+export const DEFAULT_TENABILITY_HEIGHT = 2;
 
 export interface SmokeLayerInputs {
   // Room and fire properties
@@ -65,8 +65,8 @@ export interface SmokeLayerInputs {
   // Assessment
   /** Duration to run the simulation for (s). */
   assessmentTime: number;
-  /** Optional additional height of interest, e.g. a beam soffit (m). */
-  referenceHeight: number;
+  /** Clear height at which tenability is lost and ASET is reached (m). */
+  tenabilityHeight: number;
   /** Calculation timestep (s). */
   tstep: number;
 }
@@ -97,16 +97,12 @@ export interface SmokeLayerResults {
   steps: SmokeLayerStep[];
   /** Required safe escape time (s). */
   rset: number;
-  /** Available safe escape time (s) — when the layer reaches 2 m. */
+  /** Available safe escape time (s) — when the layer reaches the tenability height. */
   aset: number;
-  /** Whether the 2 m tenability limit was actually breached. */
+  /** Whether the tenability height was actually breached. */
   asetTriggered: boolean;
   /** Margin of safety, ASET − RSET (s). Negative means tenability is exceeded. */
   marginOfSafety: number;
-  /** Whether the optional reference height was breached. */
-  referenceHeightBreached: boolean;
-  /** Time the reference height was breached (s), or null. */
-  breachTime: number | null;
   /** Clear height at the end of the run (m). */
   finalClearHeight: number;
   /** Time before occupants start leaving (s). */
@@ -117,12 +113,16 @@ export interface SmokeLayerResults {
   queueTime: number;
 }
 
-/** A named, saved set of inputs. */
+/**
+ * A named, saved document. `inputs` is the JSON the form saved: today a
+ * versioned SmokeLayerDocument (lib/smoke-layer-project.ts), or a bare
+ * SmokeLayerInputs from before the form held several buildings.
+ */
 export interface SavedRun {
   id: string;
   name: string;
   project_name: string | null;
-  inputs: SmokeLayerInputs;
+  inputs: unknown;
   created_at: string;
   updated_at: string;
 }

@@ -13,7 +13,6 @@
  */
 
 import {
-  TENABILITY_HEIGHT,
   ZONE_CONSTANTS,
   type SmokeLayerInputs,
   type SmokeLayerResults,
@@ -39,7 +38,17 @@ function plumeMassFlow(convectiveHrrKw: number, clearHeight: number): number {
 }
 
 function validate(inputs: SmokeLayerInputs): void {
-  const { roomArea, rackingPerc, roomHeight, totalExitWidth, flowRate, walkingSpeed, tstep, assessmentTime } = inputs;
+  const {
+    roomArea,
+    rackingPerc,
+    roomHeight,
+    totalExitWidth,
+    flowRate,
+    walkingSpeed,
+    tstep,
+    assessmentTime,
+    tenabilityHeight,
+  } = inputs;
 
   if (roomArea <= 0) throw new Error('Room area must be greater than zero.');
   if (roomHeight <= 0) throw new Error('Room height must be greater than zero.');
@@ -51,6 +60,10 @@ function validate(inputs: SmokeLayerInputs): void {
   if (walkingSpeed <= 0) throw new Error('Walking speed must be greater than zero.');
   if (tstep <= 0) throw new Error('Timestep must be greater than zero.');
   if (assessmentTime <= 0) throw new Error('Assessment time must be greater than zero.');
+  if (tenabilityHeight <= 0) throw new Error('Tenability height must be greater than zero.');
+  if (tenabilityHeight >= roomHeight) {
+    throw new Error('Tenability height must be below the room height — the layer starts at the ceiling.');
+  }
 }
 
 export function calculateSmokeLayer(inputs: SmokeLayerInputs): SmokeLayerResults {
@@ -69,7 +82,7 @@ export function calculateSmokeLayer(inputs: SmokeLayerInputs): SmokeLayerResults
     flowRate,
     occupancy,
     assessmentTime,
-    referenceHeight,
+    tenabilityHeight,
     tstep,
   } = inputs;
 
@@ -84,13 +97,11 @@ export function calculateSmokeLayer(inputs: SmokeLayerInputs): SmokeLayerResults
   // it reduces the plan area available to the smoke.
   const smokeArea = roomArea * (1 - rackingPerc);
 
-  let aset = assessmentTime; // placeholder until 2 m is breached
+  let aset = assessmentTime; // placeholder until the tenability height is breached
   let z = roomHeight; // clear height below the layer
   let mUpper = 0; // accumulated mass of smoke in the layer
   let tempUpper = ambientT; // well-mixed layer temperature
   let asetTriggered = false;
-  let referenceHeightBreached = false;
-  let breachTime: number | null = null;
   let limit = assessmentTime;
 
   const steps: SmokeLayerStep[] = [];
@@ -111,12 +122,7 @@ export function calculateSmokeLayer(inputs: SmokeLayerInputs): SmokeLayerResults
     const depthChange = layerDepth - (roomHeight - z);
     z = roomHeight - layerDepth;
 
-    if (!referenceHeightBreached && z <= referenceHeight) {
-      referenceHeightBreached = true;
-      breachTime = t;
-    }
-
-    if (z <= TENABILITY_HEIGHT && !asetTriggered) {
+    if (z <= tenabilityHeight && !asetTriggered) {
       aset = t;
       asetTriggered = true;
       limit = aset + RUN_ON_AFTER_ASET;
@@ -141,8 +147,6 @@ export function calculateSmokeLayer(inputs: SmokeLayerInputs): SmokeLayerResults
     aset,
     asetTriggered,
     marginOfSafety: aset - rset,
-    referenceHeightBreached,
-    breachTime,
     finalClearHeight: z,
     totalPreEvac,
     peoplePerSecond,

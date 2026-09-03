@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 
 import LineChart, { type ChartMarker, type ChartThreshold } from './LineChart';
-import { TENABILITY_HEIGHT } from '../../lib/smoke-layer-types';
 import type { SmokeLayerResults } from '../../lib/smoke-layer-types';
 
 /** Categorical slots 1 and 2 of the validated palette. */
@@ -15,7 +14,8 @@ const TABLE_ROW_TARGET = 120;
 
 interface SmokeChartsProps {
   results: SmokeLayerResults;
-  referenceHeight: number;
+  /** Clear height that defines ASET (m). */
+  tenabilityHeight: number;
 }
 
 const TABLE_COLUMNS: { key: keyof SmokeLayerResults['steps'][number]; label: string; decimals: number }[] = [
@@ -37,19 +37,14 @@ function toCsv(results: SmokeLayerResults): string {
   return [header, ...rows].join('\n');
 }
 
-export default function SmokeCharts({ results, referenceHeight }: SmokeChartsProps) {
+export default function SmokeCharts({ results, tenabilityHeight }: SmokeChartsProps) {
   const [showTable, setShowTable] = useState(false);
   const { steps, aset, rset, asetTriggered } = results;
 
-  const heightThresholds = useMemo(() => {
-    const thresholds: ChartThreshold[] = [
-      { value: TENABILITY_HEIGHT, label: `${TENABILITY_HEIGHT} m tenability` },
-    ];
-    if (referenceHeight !== TENABILITY_HEIGHT) {
-      thresholds.push({ value: referenceHeight, label: `${referenceHeight} m reference` });
-    }
-    return thresholds;
-  }, [referenceHeight]);
+  const heightThresholds = useMemo<ChartThreshold[]>(
+    () => [{ value: tenabilityHeight, label: `${tenabilityHeight} m tenability limit` }],
+    [tenabilityHeight],
+  );
 
   const markers = useMemo(() => {
     const list: ChartMarker[] = [];
