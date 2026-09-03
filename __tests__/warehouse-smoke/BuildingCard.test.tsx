@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import BuildingCard from '../../components/warehouse-smoke/BuildingCard';
-import { newBuilding, type BuildingField, type BuildingForm } from '../../lib/smoke-layer-project';
+import { DEFAULT_SHARED, newBuilding, withOverride, type BuildingField, type BuildingForm } from '../../lib/smoke-layer-project';
 
 function setup({
   building = {},
@@ -29,6 +29,7 @@ function setup({
       missing={new Set(missing)}
       invalid={new Set(invalid)}
       derivedExitWidth={derivedExitWidth}
+      shared={DEFAULT_SHARED}
     />,
   );
   return { onChange, onRemove };
@@ -89,6 +90,21 @@ describe('BuildingCard', () => {
     const { onChange } = setup({ building: { roomArea: '43047' } });
     await user.click(screen.getByText(/Use 1,435/));
     expect(onChange).toHaveBeenCalledWith({ occupancy: '1435' });
+  });
+
+  it('says nothing about assumptions while the building follows the shared ones', () => {
+    setup();
+    expect(screen.queryByText(/Own assumptions/)).not.toBeInTheDocument();
+  });
+
+  it('lists each overridden assumption and lets it go back to shared', async () => {
+    const user = userEvent.setup();
+    const { onChange } = setup({ building: withOverride(newBuilding(0, 'b1'), 'detectionTime', '120') });
+    expect(screen.getByText(/Own assumptions/)).toBeInTheDocument();
+    expect(screen.getByText(/Detection time 120 s/)).toHaveAttribute('title', 'Shared value: 60 s');
+
+    await user.click(screen.getByLabelText('Use shared Detection time'));
+    expect(onChange).toHaveBeenCalledWith({ overrides: {} });
   });
 
   it('hides Remove for the only building', () => {

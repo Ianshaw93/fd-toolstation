@@ -1,14 +1,19 @@
 import {
   DEFAULT_SHARED,
   buildReportRequest,
+  describeSharedValue,
+  effectiveShared,
   evaluateDocument,
   exitWidthFromDoors,
   loadDocument,
   newBuilding,
   newDocument,
+  overriddenFields,
   parseBuilding,
   parseProject,
   parseShared,
+  withOverride,
+  withoutOverride,
   type BuildingForm,
   type SmokeLayerDocument,
 } from '../../lib/smoke-layer-project';
@@ -160,6 +165,75 @@ describe('parseBuilding', () => {
   });
 });
 
+describe('per-building overrides of the shared assumptions', () => {
+  it('starts every building on the shared values', () => {
+    const b = newBuilding(0, 'b1');
+    expect(b.overrides).toEqual({});
+    expect(overriddenFields(b)).toEqual([]);
+    expect(effectiveShared(DEFAULT_SHARED, b, 'detectionTime')).toBe('60');
+  });
+
+  it('uses the override for that building and leaves the shared values alone', () => {
+    const b = withOverride(unit1(), 'detectionTime', '120');
+    expect(overriddenFields(b)).toEqual(['detectionTime']);
+    expect(effectiveShared(DEFAULT_SHARED, b, 'detectionTime')).toBe('120');
+    expect(effectiveShared(DEFAULT_SHARED, b, 'preMovementTime')).toBe('180');
+
+    const parsed = parseBuilding(shared(), b);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.inputs.detectionTime).toBe(120);
+    expect(parsed.inputs.preMovementTime).toBe(180);
+  });
+
+  it('lists overrides in the shared field order, not the order they were made', () => {
+    const b = withOverride(withOverride(unit1(), 'tstep', '0.5'), 'fgr', '0.047');
+    expect(overriddenFields(b)).toEqual(['fgr', 'tstep']);
+  });
+
+  it('reverts to the shared value when the override is removed', () => {
+    const b = withoutOverride(withOverride(unit1(), 'detectionTime', '120'), 'detectionTime');
+    expect(overriddenFields(b)).toEqual([]);
+    expect(effectiveShared(DEFAULT_SHARED, b, 'detectionTime')).toBe('60');
+  });
+
+  it('treats an override that matches the shared value as still an override', () => {
+    // Webflow/Unity semantics: the engineer chose a value for this building, so a
+    // later change to the shared value must not silently move it.
+    const b = withOverride(unit1(), 'detectionTime', '60');
+    expect(overriddenFields(b)).toEqual(['detectionTime']);
+  });
+
+  it('reports a blank or junk override as the missing field of that building', () => {
+    const parsed = parseBuilding(shared(), withOverride(unit1(), 'walkingSpeed', 'fast'));
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.missing).toEqual(['walkingSpeed']);
+  });
+
+  it('runs each building with its own value while the others inherit', () => {
+    const doc: SmokeLayerDocument = {
+      ...newDocument(),
+      buildings: [unit1(), withOverride(unit1({ id: 'b2', name: 'Unit 3' }), 'detectionTime', '120')],
+    };
+    const evaluation = evaluateDocument(doc);
+    const [a, b] = evaluation.buildings;
+    expect(a.outcome.state).toBe('ok');
+    expect(b.outcome.state).toBe('ok');
+    if (a.outcome.state !== 'ok' || b.outcome.state !== 'ok') return;
+    expect(a.outcome.inputs.detectionTime).toBe(60);
+    expect(b.outcome.inputs.detectionTime).toBe(120);
+    expect(b.outcome.results.rset).toBe(a.outcome.results.rset + 60);
+  });
+
+  it('describes values with their unit and growth rates by name', () => {
+    expect(describeSharedValue('detectionTime', '120')).toBe('120 s');
+    expect(describeSharedValue('fgr', '0.188')).toBe('Ultra-fast');
+    expect(describeSharedValue('fgr', '0.05')).toBe('0.05 kW/s²');
+    expect(describeSharedValue('tenabilityHeight', '')).toBe('blank');
+  });
+});
+
 describe('parseProject', () => {
   it('trims text and types the staircase count', () => {
     const parsed = parseProject({
@@ -261,6 +335,13 @@ describe('loadDocument', () => {
     expect(doc.buildings[0].doors).toEqual([]);
     expect(doc.shared.tenabilityHeight).toBe('2');
     expect(doc.shared.detectionTime).toBe('60');
+  });
+
+  it('gives buildings saved before overrides existed an empty override set', () => {
+    const doc = newDocument();
+    const saved = JSON.parse(JSON.stringify(doc));
+    delete saved.buildings[0].overrides;
+    expect(loadDocument(saved).buildings[0].overrides).toEqual({});
   });
 
   it('reads the old referenceHeight name as the tenability height', () => {

@@ -17,6 +17,7 @@
 import { calculateSmokeLayer } from './smoke-layer-calc';
 import {
   DEFAULT_TENABILITY_HEIGHT,
+  FIRE_GROWTH_RATES,
   type SmokeLayerInputs,
   type SmokeLayerResults,
 } from './smoke-layer-types';
@@ -64,9 +65,16 @@ export interface BuildingForm {
   hasUndercroft: boolean;
   officeStoreys: string;
   officeHeightM: string;
+  /**
+   * Shared assumptions this building departs from. Only the fields present here
+   * are overridden; everything else inherits from the document's shared values,
+   * so changing a shared value still reaches every building that has not
+   * chosen its own.
+   */
+  overrides: Partial<SharedForm>;
 }
 
-/** Building fields that can be reported as missing or invalid. */
+/** Building fields that can be reported as missing or invalid, including an overridden assumption. */
 export type BuildingField =
   | 'roomArea'
   | 'roomHeight'
@@ -76,7 +84,8 @@ export type BuildingField =
   | 'doors'
   | 'exitWidthOverride'
   | 'officeStoreys'
-  | 'officeHeightM';
+  | 'officeHeightM'
+  | SharedField;
 
 export interface ProjectForm {
   projectName: string;
@@ -147,6 +156,7 @@ export function newBuilding(index: number, id: string = newId()): BuildingForm {
     hasUndercroft: false,
     officeStoreys: '',
     officeHeightM: '',
+    overrides: {},
   };
 }
 
@@ -170,7 +180,55 @@ export const SHARED_FIELD_LABELS: Record<SharedField, string> = {
   tstep: 'Timestep',
 };
 
+export const SHARED_FIELDS = Object.keys(SHARED_FIELD_LABELS) as SharedField[];
+
+/** Units for the shared assumptions, as shown after a value ("60 s"). The growth rate is described by name. */
+export const SHARED_FIELD_UNITS: Record<SharedField, string> = {
+  fgr: 'kW/s²',
+  detectionTime: 's',
+  preMovementTime: 's',
+  walkingSpeed: 'm/s',
+  flowRate: 'people/s/m',
+  assessmentTime: 's',
+  tenabilityHeight: 'm',
+  tstep: 's',
+};
+
+/** A shared value for display: "60 s", "Ultra-fast", "0.05 kW/s²", or "blank". */
+export function describeSharedValue(field: SharedField, value: string): string {
+  const trimmed = value.trim();
+  if (trimmed === '') return 'blank';
+  if (field === 'fgr') {
+    const rate = FIRE_GROWTH_RATES.find((r) => String(r.value) === trimmed);
+    if (rate) return rate.label;
+  }
+  return `${trimmed} ${SHARED_FIELD_UNITS[field]}`;
+}
+
+/** The shared fields this building has chosen its own value for, in display order. */
+export function overriddenFields(b: BuildingForm): SharedField[] {
+  return SHARED_FIELDS.filter((f) => f in b.overrides);
+}
+
+/** The value this building runs with for a shared field: its override if it has one, else the shared value. */
+export function effectiveShared(shared: SharedForm, b: BuildingForm, field: SharedField): string {
+  return b.overrides[field] ?? shared[field];
+}
+
+/** Give a building its own value for a shared field. */
+export function withOverride(b: BuildingForm, field: SharedField, value: string): BuildingForm {
+  return { ...b, overrides: { ...b.overrides, [field]: value } };
+}
+
+/** Put a building back on the shared value for a field. */
+export function withoutOverride(b: BuildingForm, field: SharedField): BuildingForm {
+  const overrides = { ...b.overrides };
+  delete overrides[field];
+  return { ...b, overrides };
+}
+
 export const BUILDING_FIELD_LABELS: Record<BuildingField, string> = {
+  ...SHARED_FIELD_LABELS,
   roomArea: 'Floor area',
   roomHeight: 'Room height',
   rackingPerc: 'Racking',
@@ -274,11 +332,10 @@ export type SharedValues = Record<SharedField, number>;
 export type ParsedShared = { ok: true; values: SharedValues } | { ok: false; missing: SharedField[] };
 
 export function parseShared(shared: SharedForm): ParsedShared {
-  const fields = Object.keys(SHARED_FIELD_LABELS) as SharedField[];
-  const missing = fields.filter((f) => asNumber(shared[f]) === null);
+  const missing = SHARED_FIELDS.filter((f) => asNumber(shared[f]) === null);
   if (missing.length > 0) return { ok: false, missing };
   const values = {} as SharedValues;
-  for (const f of fields) values[f] = asNumber(shared[f]) as number;
+  for (const f of SHARED_FIELDS) values[f] = asNumber(shared[f]) as number;
   return { ok: true, values };
 }
 
@@ -314,9 +371,18 @@ export interface BuildingProblems {
   invalid: BuildingField[];
 }
 
-export function parseBuilding(shared: SharedValues, b: BuildingForm): ParsedBuilding | BuildingProblems {
+export function parseBuilding(sharedValues: SharedValues, b: BuildingForm): ParsedBuilding | BuildingProblems {
   const missing: BuildingField[] = [];
   const invalid: BuildingField[] = [];
+
+  // An override that is blank or not a number is this building's problem, not
+  // the shared assumptions', so the other buildings keep running.
+  const shared: SharedValues = { ...sharedValues };
+  for (const f of overriddenFields(b)) {
+    const n = asNumber(b.overrides[f] ?? '');
+    if (n === null) missing.push(f);
+    else shared[f] = n;
+  }
 
   const required = ['roomArea', 'roomHeight', 'rackingPerc', 'maximumTravelDistance', 'occupancy'] as const;
   const numbers: Partial<Record<(typeof required)[number], number>> = {};
@@ -534,7 +600,9 @@ export function loadDocument(raw: unknown): SmokeLayerDocument {
   if (!isRecord(raw)) throw new Error('This saved run is not in a shape the form understands.');
 
   if (raw.version === DOCUMENT_VERSION && isRecord(raw.project) && isRecord(raw.shared) && Array.isArray(raw.buildings)) {
-    return raw as unknown as SmokeLayerDocument;
+    const doc = raw as unknown as SmokeLayerDocument;
+    // Documents saved before buildings could override the shared assumptions.
+    return { ...doc, buildings: doc.buildings.map((b) => ({ ...b, overrides: b.overrides ?? {} })) };
   }
 
   if (!('roomArea' in raw)) throw new Error('This saved run is not in a shape the form understands.');

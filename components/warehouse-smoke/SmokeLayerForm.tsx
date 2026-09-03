@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import CollapsibleSection from '../fee-proposal/CollapsibleSection';
+import AssumptionsMatrix from './AssumptionsMatrix';
 import BuildingCard from './BuildingCard';
 import BuildingsSummaryTable from './BuildingsSummaryTable';
 import ProjectSection from './ProjectSection';
@@ -52,8 +53,8 @@ export default function SmokeLayerForm() {
   const selected =
     evaluation.buildings.find((b) => b.id === selectedId) ?? evaluation.buildings[0];
   const selectedForm = doc.buildings.find((b) => b.id === selected?.id);
-  const tenabilityHeight = Number(doc.shared.tenabilityHeight);
   const assessmentTime = Number(doc.shared.assessmentTime);
+  const anyOverrides = doc.buildings.some((b) => Object.keys(b.overrides).length > 0);
 
   const exceeded = evaluation.buildings.filter(
     (b) => b.outcome.state === 'ok' && b.outcome.results.marginOfSafety <= 0,
@@ -94,6 +95,14 @@ export default function SmokeLayerForm() {
 
   const sharedInvalid = useMemo(() => new Set(evaluation.sharedMissing), [evaluation]);
   const projectInvalid = useMemo(() => new Set(evaluation.projectInvalid), [evaluation]);
+  // Per building, the fields that failed to parse, for the matrix to flag bad overrides.
+  const buildingProblems = useMemo(() => {
+    const map = new Map<string, Set<BuildingField>>();
+    for (const b of evaluation.buildings) {
+      if (b.outcome.state === 'incomplete') map.set(b.id, new Set([...b.outcome.missing, ...b.outcome.invalid]));
+    }
+    return map;
+  }, [evaluation]);
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,460px)_minmax(0,1fr)] gap-6 items-start">
@@ -110,6 +119,18 @@ export default function SmokeLayerForm() {
         <CollapsibleSection title="Assumptions for all buildings" defaultOpen={false}>
           <SharedAssumptionsSection shared={doc.shared} onChange={updateShared} invalid={sharedInvalid} />
         </CollapsibleSection>
+
+        {(doc.buildings.length > 1 || anyOverrides) && (
+          <CollapsibleSection title="Assumptions by building" defaultOpen={anyOverrides}>
+            <AssumptionsMatrix
+              shared={doc.shared}
+              buildings={doc.buildings}
+              onSharedChange={updateShared}
+              onBuildingChange={updateBuilding}
+              problems={buildingProblems}
+            />
+          </CollapsibleSection>
+        )}
 
         {doc.buildings.map((b, i) => {
           const result = evaluation.buildings.find((e) => e.id === b.id);
@@ -129,6 +150,7 @@ export default function SmokeLayerForm() {
                 missing={missing}
                 invalid={invalid}
                 derivedExitWidth={derived}
+                shared={doc.shared}
               />
             </CollapsibleSection>
           );
@@ -235,9 +257,12 @@ export default function SmokeLayerForm() {
                     <ResultsSummary
                       results={selected.outcome.results}
                       assessmentTime={selected.outcome.inputs.assessmentTime}
-                      tenabilityHeight={tenabilityHeight}
+                      tenabilityHeight={selected.outcome.inputs.tenabilityHeight}
                     />
-                    <SmokeCharts results={selected.outcome.results} tenabilityHeight={tenabilityHeight} />
+                    <SmokeCharts
+                      results={selected.outcome.results}
+                      tenabilityHeight={selected.outcome.inputs.tenabilityHeight}
+                    />
                   </>
                 )}
               </>

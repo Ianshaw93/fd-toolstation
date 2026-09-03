@@ -39,6 +39,23 @@ layer still descending. RSET is detection + pre-movement + travel + queuing.
 
 Reported temperatures subtract 273 (not 273.15), matching the original script.
 
+## Shared assumptions and per-building overrides
+
+The "Assumptions for all buildings" section holds one value of each assumption for the whole
+document. A building inherits every one of them unless it carries its own value in
+`BuildingForm.overrides` (only the fields that differ are present, as strings). The pattern is the
+one Webflow, Unity and Vercel use for inherited settings: inherit by default, override per field,
+mark the override quietly, reset per field. The "Assumptions by building" section (shown once there
+is more than one building, or any override) is the matrix where overrides are edited: one row per
+assumption, a Shared column that edits the same state as the section above, and a column per
+building. Greyed dashed cells show the shared value through; typing in one makes it that
+building's own value (blue bar, tooltip with the shared value, × to reset). "Show only differences"
+hides rows every building inherits. Each building card lists its overrides as chips with the
+same reset. An override that is blank or not a number is reported as that building's missing
+field, so the other buildings keep running. The report request already carries per-building
+inputs, so overrides reach the backend unchanged; the multi-building template currently flags
+differing values with an engineer prompt rather than a per-building assumptions table.
+
 ## Where the calculation lives
 
 **In the browser, in TypeScript** — `lib/smoke-layer-calc.ts`. The backend never recomputes it.

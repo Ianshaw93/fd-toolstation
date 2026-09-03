@@ -3,10 +3,15 @@
 import NumberField from './NumberField';
 import {
   DEFAULT_OCCUPANCY_DENSITY,
+  SHARED_FIELD_LABELS,
   defaultOccupancy,
+  describeSharedValue,
+  overriddenFields,
+  withoutOverride,
   type BuildingField,
   type BuildingForm,
   type DoorGroupForm,
+  type SharedForm,
 } from '../../lib/smoke-layer-project';
 
 interface BuildingCardProps {
@@ -21,6 +26,8 @@ interface BuildingCardProps {
   invalid: Set<BuildingField>;
   /** The exit width the door schedule gives, when it parses. */
   derivedExitWidth: number | null;
+  /** The document's shared assumptions, so an override can say what it departs from. */
+  shared: SharedForm;
 }
 
 const controlClass =
@@ -56,8 +63,10 @@ export default function BuildingCard({
   missing,
   invalid,
   derivedExitWidth,
+  shared,
 }: BuildingCardProps) {
   const id = (field: string) => `b-${building.id}-${field}`;
+  const overrides = overriddenFields(building);
   const flagged = (field: BuildingField) => missing.has(field) || invalid.has(field);
 
   const area = Number(building.roomArea);
@@ -110,6 +119,30 @@ export default function BuildingCard({
           </button>
         )}
       </div>
+
+      {overrides.length > 0 && (
+        <div className="md:col-span-2 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-gray-600">Own assumptions:</span>
+          {overrides.map((f) => (
+            <span
+              key={f}
+              className="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-2 py-0.5 text-blue-900"
+              title={`Shared value: ${describeSharedValue(f, shared[f])}`}
+            >
+              {SHARED_FIELD_LABELS[f]} {describeSharedValue(f, building.overrides[f] ?? '')}
+              <button
+                type="button"
+                onClick={() => onChange({ overrides: withoutOverride(building, f).overrides })}
+                aria-label={`Use shared ${SHARED_FIELD_LABELS[f]}`}
+                className="text-blue-700 hover:text-blue-900 leading-none"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <span className="text-gray-500">Edit under Assumptions by building.</span>
+        </div>
+      )}
 
       <NumberField
         id={id('room-area')}
