@@ -121,7 +121,7 @@ export default function SmokeLayerForm() {
         </CollapsibleSection>
 
         {(doc.buildings.length > 1 || anyOverrides) && (
-          <CollapsibleSection title="Assumptions by building" defaultOpen={anyOverrides}>
+          <CollapsibleSection title="Assumptions by building" defaultOpen>
             <AssumptionsMatrix
               shared={doc.shared}
               buildings={doc.buildings}
