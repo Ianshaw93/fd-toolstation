@@ -13,7 +13,7 @@ import SmokeCharts from './SmokeCharts';
 
 import { fetchEngineers } from '../../lib/fee-api';
 import type { Engineer } from '../../lib/fee-types';
-import { generateSmokeLayerReport } from '../../lib/smoke-layer-api';
+import { generateSmokeLayerReport, type ReportDocument } from '../../lib/smoke-layer-api';
 import {
   BUILDING_FIELD_LABELS,
   SHARED_FIELD_LABELS,
@@ -36,7 +36,7 @@ export default function SmokeLayerForm() {
   const [selectedId, setSelectedId] = useState<string>(() => doc.buildings[0].id);
   const [engineers, setEngineers] = useState<Engineer[]>([]);
   const [reportError, setReportError] = useState<string | null>(null);
-  const [generating, setGenerating] = useState(false);
+  const [generating, setGenerating] = useState<ReportDocument | null>(null);
 
   useEffect(() => {
     fetchEngineers()
@@ -79,16 +79,16 @@ export default function SmokeLayerForm() {
     setSelectedId(loaded.buildings[0]?.id ?? '');
   }
 
-  async function handleReport() {
+  async function handleDownload(documentType: ReportDocument) {
     if (!request) return;
-    setGenerating(true);
+    setGenerating(documentType);
     setReportError(null);
     try {
-      await generateSmokeLayerReport(request);
+      await generateSmokeLayerReport(request, documentType);
     } catch (e) {
-      setReportError(e instanceof Error ? e.message : 'Failed to generate report');
+      setReportError(e instanceof Error ? e.message : `Failed to generate ${documentType}`);
     } finally {
-      setGenerating(false);
+      setGenerating(null);
     }
   }
 
@@ -170,11 +170,20 @@ export default function SmokeLayerForm() {
             <div className="flex flex-wrap items-center gap-3 mb-4">
               <button
                 type="button"
-                onClick={handleReport}
-                disabled={!request || generating}
+                onClick={() => handleDownload('report')}
+                disabled={!request || generating !== null}
                 className="px-5 py-2.5 rounded-lg bg-black hover:bg-gray-800 text-white font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                {generating ? 'Generating…' : 'Download Word report'}
+                {generating === 'report' ? 'Generating…' : 'Download Word report'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDownload('appendix')}
+                disabled={!request || generating !== null}
+                title="The calculation appendix on its own, for dropping into a wider fire strategy report"
+                className="px-5 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-900 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {generating === 'appendix' ? 'Generating…' : 'Download appendix only'}
               </button>
               {!request && (
                 <span className="text-xs text-gray-500">

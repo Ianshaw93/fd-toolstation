@@ -15,27 +15,45 @@ import type { SavedRun } from './smoke-layer-types';
 
 export type { ReportRequest } from './smoke-layer-project';
 
+/** Which Word deliverable to render: the full report, or the standalone calculation appendix. */
+export type ReportDocument = 'report' | 'appendix';
+
+/** The download name the backend suggested, if it sent one. */
+function suggestedFilename(res: Response): string | null {
+  const header = res.headers.get('Content-Disposition') ?? '';
+  const match = header.match(/filename="?([^";]+)"?/);
+  return match ? match[1] : null;
+}
+
 async function failure(res: Response, fallback: string): Promise<never> {
   const body = await res.json().catch(() => ({ detail: fallback }));
   throw new Error(body.detail || fallback);
 }
 
-/** POST the project and its buildings; one building gives the single-building report. */
-export async function generateSmokeLayerReport(data: ReportRequest): Promise<void> {
+/**
+ * POST the project and its buildings and download the Word file. One building gives
+ * the single-building document, more the multi-building one; `documentType` picks
+ * the report or the standalone calculation appendix.
+ */
+export async function generateSmokeLayerReport(
+  data: ReportRequest,
+  documentType: ReportDocument = 'report',
+): Promise<void> {
   const res = await fetch(`${API_URL}/smoke-layer/report`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, document: documentType }),
   });
 
-  if (!res.ok) await failure(res, 'Failed to generate report');
+  if (!res.ok) await failure(res, `Failed to generate ${documentType}`);
 
   const blob = await res.blob();
   const name = data.project_name.trim().replace(/\s+/g, '_') || 'Warehouse';
+  const fallback = documentType === 'appendix' ? `${name}_Smoke_Layer_Appendix.docx` : `${name}_Smoke_Layer.docx`;
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${name}_Smoke_Layer.docx`;
+  a.download = suggestedFilename(res) ?? fallback;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
