@@ -2,8 +2,10 @@
 
 Task pane for desktop Word that builds the Fire Dynamics fee proposal letter from the same
 form as the web tool: fill in the form, press Generate, and the letter opens as a new Word
-document. (The insert-in-place and stored-inputs mechanics live on in `lib/word-ops.ts`
-for the section experiments, not in the fee pane.)
+document. The RIBA stage tables are stacked cards in the pane (`components/addin/StageCards.tsx`)
+because the pane is 320 px wide by default; the web tool keeps its table. (The
+insert-in-place and stored-inputs mechanics live on in `lib/word-ops.ts` for the section
+experiments, not in the fee pane.)
 
 The shareable add-in is the fee proposal only. The sections and citations experiments
 (warehouse appendix fragments, Word-native references, local-AI citation finder) stay in
@@ -14,7 +16,7 @@ the code behind `?dev=1` on the pane URL, which only the localhost manifest uses
 | Piece | Where |
 | --- | --- |
 | Pane page | `app/addin/word/page.tsx` |
-| Fee form in the pane | `components/addin/FeeProposalPane.tsx` (reuses `components/fee-proposal/*`) |
+| Fee form in the pane | `components/addin/FeeProposalPane.tsx` (reuses `components/fee-proposal/*`; stages via `StageCards` + `ServiceCard`) |
 | Word JS operations | `lib/word-ops.ts` (createDocument, insertFileFromBase64 in a tagged content control, state in a custom XML part) |
 | Backend calls | `lib/word-addin-api.ts` (same-origin `/backend/...`, rewritten in `next.config.ts`) |
 | Production manifest | `addin/manifest.word.xml` (Vercel app) |
@@ -24,7 +26,7 @@ the code behind `?dev=1` on the pane URL, which only the localhost manifest uses
 The pane falls back to the web tool's `/fee-proposals/generate` when the backend does not
 have the add-in endpoint yet, so "New document" works against today's Railway deploy.
 
-## Ship it
+## Ship it (same route as the Mail Marshal Outlook add-in)
 
 1. Backend: cherry-pick the commit that adds `routers/word_fee.py` and its two lines in
    `main.py` onto `master` (Railway deploys master). It has no other dependencies.
@@ -33,11 +35,16 @@ have the add-in endpoint yet, so "New document" works against today's Railway de
    `public/addin/word/`.
 3. Check https://fd-toolstation.vercel.app/addin/word loads (preview mode in a browser) and
    https://fd-toolstation.vercel.app/backend/fee-proposals/engineers returns the list.
-4. Microsoft 365 admin center > Settings > Integrated apps > Upload custom apps > Office
-   Add-in > `addin/manifest.word.xml`. Assign to the team. It appears in Word within a few
-   hours as **Fee Proposal** on the Home tab.
+4. [Microsoft 365 admin center](https://admin.microsoft.com) > Settings > Integrated apps >
+   Upload custom apps > Office Add-in > upload `addin/manifest.word.xml`. Assign to the
+   team (or everyone), accept, deploy. It appears in desktop Word within a few hours as
+   **Fee Proposal** on the Home tab; users may need to restart Word once.
 
-Manifest changes need a re-upload; pane code changes deploy with the app.
+Manifest changes (name, icon URLs, button label, `Version`) need a re-upload in the admin
+center; pane code changes deploy with the app. Bump `<Version>` when re-uploading.
+
+No sign-in: the pane is public like the rest of fd-toolstation, and the backend is the same
+Railway API the web tool calls.
 
 ## Run locally
 
@@ -51,8 +58,6 @@ pwsh addin/sideload-word.ps1     # once; registers the localhost manifest, then 
 
 ## Known gaps
 
-- Insert at cursor brings the body only: Word drops an inserted file's headers and footers,
-  so the merged letterhead comes through the New document route.
-- The stage tables are wide for a task pane and scroll sideways; a stacked layout is the
-  next UI job.
-- Not committed yet on either worktree.
+- Word on the web and Mac are untested; the pane is plain HTML so they should work, but the
+  icon cache and pane width differ.
+- The dev tools (`?dev=1`) are still in the bundle, only hidden.
