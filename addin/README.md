@@ -2,8 +2,8 @@
 
 Task pane for desktop Word that builds the Fire Dynamics fee proposal letter from the same
 form as the web tool: fill in the form, press Generate, and the letter opens as a new Word
-document. (Insert at cursor and Regenerate in place exist behind the dev flag; the inputs
-are then stored inside the document so reopening the file restores them.)
+document. (The insert-in-place and stored-inputs mechanics live on in `lib/word-ops.ts`
+for the section experiments, not in the fee pane.)
 
 The shareable add-in is the fee proposal only. The sections and citations experiments
 (warehouse appendix fragments, Word-native references, local-AI citation finder) stay in

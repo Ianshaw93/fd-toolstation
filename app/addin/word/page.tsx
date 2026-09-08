@@ -203,7 +203,7 @@ export default function WordAddinPage() {
 
       {tab === 'fee' && (
         <main className="px-4 py-3">
-          <FeeProposalPane inWord={inWord} busy={busy} run={run} devTools={devTools} />
+          <FeeProposalPane inWord={inWord} busy={busy} run={run} />
           <section className="mt-4">
             <h2 className="font-medium mb-1">Log</h2>
             <ul className="text-xs text-gray-600 space-y-0.5 font-mono">
