@@ -26,7 +26,11 @@ interface FeeProposalState {
   design_stages_6: DesignStagesRiba6;
 }
 
+export type FeeProposalSnapshot = FeeProposalState;
+
 type Action =
+  // Replace the whole form, e.g. from the state a Word document remembers.
+  | { type: 'HYDRATE'; state: FeeProposalState }
   | { type: 'SET_CLIENT'; field: keyof ClientDetails; value: string | string[] }
   | { type: 'SET_PROJECT'; field: keyof ProjectDetails; value: string | boolean }
   | { type: 'SET_FEE_OPTIONS'; field: keyof FeeOptions; value: string | number | boolean }
@@ -78,6 +82,9 @@ function initialState(): FeeProposalState {
 
 function reducer(state: FeeProposalState, action: Action): FeeProposalState {
   switch (action.type) {
+    case 'HYDRATE':
+      return { ...initialState(), ...action.state };
+
     case 'SET_CLIENT':
       return { ...state, client: { ...state.client, [action.field]: action.value } };
 
