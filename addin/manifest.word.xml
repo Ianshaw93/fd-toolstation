@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PRODUCTION manifest for the FD fee proposal Word add-in: task pane served by the
+  fd-toolstation Vercel app, backend via its /backend rewrite to Railway. Own Id and
+  display name so it can be installed alongside the localhost dev manifest.
+  Deploy: Microsoft 365 admin center > Settings > Integrated apps > Upload custom apps
+  > Office Add-in > this file. Assign to the team; allow a few hours to appear in Word.
+-->
+<OfficeApp
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+  xsi:type="TaskPaneApp">
+  <Id>6f1e9b2c-3a4d-4e5f-8b7a-9c0d1e2f3a4b</Id>
+  <Version>0.1.0.0</Version>
+  <ProviderName>Fire Dynamics Group</ProviderName>
+  <DefaultLocale>en-GB</DefaultLocale>
+  <DisplayName DefaultValue="FD Fee Proposal"/>
+  <Description DefaultValue="Build a Fire Dynamics fee proposal letter in Word: fill in the form, open the letter as a new document or insert it as a section you can regenerate."/>
+  <IconUrl DefaultValue="https://fd-toolstation.vercel.app/addin/word/icon-64.png"/>
+  <HighResolutionIconUrl DefaultValue="https://fd-toolstation.vercel.app/addin/word/icon-128.png"/>
+  <SupportUrl DefaultValue="https://fd-toolstation.vercel.app"/>
+  <AppDomains>
+    <AppDomain>https://fd-toolstation.vercel.app</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Document"/>
+  </Hosts>
+  <Requirements>
+    <Sets DefaultMinVersion="1.3">
+      <Set Name="WordApi" MinVersion="1.3"/>
+    </Sets>
+  </Requirements>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://fd-toolstation.vercel.app/addin/word"/>
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Document">
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="getStarted.title"/>
+            <Description resid="getStarted.desc"/>
+            <LearnMoreUrl resid="support.url"/>
+          </GetStarted>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="fdg.group">
+                <Label resid="group.label"/>
+                <Icon>
+                  <bt:Image size="16" resid="icon.16"/>
+                  <bt:Image size="32" resid="icon.32"/>
+                  <bt:Image size="80" resid="icon.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="fdg.openPane">
+                  <Label resid="button.label"/>
+                  <Supertip>
+                    <Title resid="button.label"/>
+                    <Description resid="button.tip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="icon.16"/>
+                    <bt:Image size="32" resid="icon.32"/>
+                    <bt:Image size="80" resid="icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>fdg.taskpane</TaskpaneId>
+                    <SourceLocation resid="taskpane.url"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="icon.16" DefaultValue="https://fd-toolstation.vercel.app/addin/word/icon-16.png"/>
+        <bt:Image id="icon.32" DefaultValue="https://fd-toolstation.vercel.app/addin/word/icon-32.png"/>
+        <bt:Image id="icon.80" DefaultValue="https://fd-toolstation.vercel.app/addin/word/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="taskpane.url" DefaultValue="https://fd-toolstation.vercel.app/addin/word"/>
+        <bt:Url id="support.url" DefaultValue="https://fd-toolstation.vercel.app"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="group.label" DefaultValue="Fire Dynamics"/>
+        <bt:String id="button.label" DefaultValue="Fee Proposal"/>
+        <bt:String id="getStarted.title" DefaultValue="Fee Proposal"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="button.tip" DefaultValue="Build a fee proposal letter from the form and open or insert it."/>
+        <bt:String id="getStarted.desc" DefaultValue="Find the Fee Proposal button on the Home tab."/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>
