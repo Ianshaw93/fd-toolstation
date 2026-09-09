@@ -35,13 +35,29 @@ have the add-in endpoint yet, so "New document" works against today's Railway de
    `public/addin/word/`.
 3. Check https://fd-toolstation.vercel.app/addin/word loads (preview mode in a browser) and
    https://fd-toolstation.vercel.app/backend/fee-proposals/engineers returns the list.
-4. [Microsoft 365 admin center](https://admin.microsoft.com) > Settings > Integrated apps >
-   Upload custom apps > Office Add-in > upload `addin/manifest.word.xml`. Assign to the
-   team (or everyone), accept, deploy. It appears in desktop Word within a few hours as
-   **Fee Proposal** on the Home tab; users may need to restart Word once.
+4. Deploy the manifest into Exchange's organisation app catalogue, which is the list desktop
+   Word reads. In PowerShell 7 (`pwsh`), with the ExchangeOnlineManagement module installed:
 
-Manifest changes (name, icon URLs, button label, `Version`) need a re-upload in the admin
-center; pane code changes deploy with the app. Bump `<Version>` when re-uploading.
+   ```powershell
+   Connect-ExchangeOnline -UserPrincipalName <admin upn>
+   $bytes = [IO.File]::ReadAllBytes('addin\manifest.word.xml')
+   New-App -OrganizationApp -FileData $bytes -Enabled $true -DefaultStateForUser Enabled -ProvidedTo Everyone
+   Get-App -OrganizationApp | Where-Object DisplayName -like 'FD*'
+   ```
+
+   It appears in desktop Word within a few hours as **Fee Proposal** on the Home tab; users
+   may need to restart Word once. Later manifest changes go through `Set-App -OrganizationApp
+   -Identity <id> -FileData $bytes`; removal through `Remove-App -OrganizationApp`.
+
+   Gotchas found 9 Sep 2026: the admin center's Integrated apps upload showed "OK" but never
+   reached Exchange, and `New-App` explained why: Exchange's manifest validator rejects a
+   `<Requirements><Set Name="WordApi">` block (it only knows Outlook's sets). The manifests
+   therefore carry no Requirements element; the pane checks `WordApi 1.3` at runtime instead.
+   `<Version>` must be 1.0 or higher for the validator. Verify what Word will see with
+   `Get-App -OrganizationApp`, and what a user sees with `Get-App -Mailbox <upn>`.
+
+Manifest changes (name, icon URLs, button label, `Version`) need `Set-App`; pane code
+changes deploy with the app. Bump `<Version>` when re-uploading.
 
 No sign-in: the pane is public like the rest of fd-toolstation, and the backend is the same
 Railway API the web tool calls.

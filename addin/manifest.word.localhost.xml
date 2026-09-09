@@ -27,11 +27,6 @@
   <Hosts>
     <Host Name="Document"/>
   </Hosts>
-  <Requirements>
-    <Sets DefaultMinVersion="1.3">
-      <Set Name="WordApi" MinVersion="1.3"/>
-    </Sets>
-  </Requirements>
   <DefaultSettings>
     <SourceLocation DefaultValue="https://localhost:3100/addin/word?dev=1"/>
   </DefaultSettings>

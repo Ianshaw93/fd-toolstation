@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useFeeProposal } from '../../hooks/useFeeProposal';
 import type { Engineer } from '../../lib/fee-types';
 import { fetchEngineersViaProxy, renderFeeProposal } from '../../lib/word-addin-api';
-import { newDocumentFromBase64 } from '../../lib/word-ops';
+import { isSetSupported, newDocumentFromBase64 } from '../../lib/word-ops';
 import CollapsibleSection from '../fee-proposal/CollapsibleSection';
 import ClientDetailsSection from '../fee-proposal/ClientDetailsSection';
 import ProjectDetailsSection from '../fee-proposal/ProjectDetailsSection';
@@ -44,6 +44,11 @@ export default function FeeProposalPane({ inWord, busy, run }: Props) {
     run('Generate', async () => {
       const gap = missing();
       if (gap) throw new Error(gap);
+      // The manifest no longer declares WordApi 1.3 (Exchange's validator rejects it), so
+      // check here that this Word can open a generated document.
+      if (!isSetSupported('WordApi', '1.3')) {
+        throw new Error('This version of Word cannot open a generated document. Update Word (Microsoft 365) and try again.');
+      }
       const b64 = await renderFeeProposal(buildRequest());
       await newDocumentFromBase64(b64);
       return 'Fee proposal opened as a new document.';
