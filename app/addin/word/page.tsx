@@ -98,12 +98,16 @@ export default function WordAddinPage() {
   }, [say]);
 
   useEffect(() => {
-    fetchSections().then(setSections).catch((e) => say(`Backend: ${e.message}`));
-    fetchSources().then(setSources).catch(() => undefined);
+    // The sections and sources endpoints exist only on the dev backend; the fee pane
+    // never needs them, so leave the log clean in production.
+    if (devTools) {
+      fetchSections().then(setSections).catch((e) => say(`Backend: ${e.message}`));
+      fetchSources().then(setSources).catch(() => undefined);
+    }
     // If office.js never calls back (CDN blocked, plain browser), settle into preview mode.
     const t = setTimeout(() => setHost((h) => (h === 'loading' ? 'preview' : h)), 4000);
     return () => clearTimeout(t);
-  }, [say]);
+  }, [say, devTools]);
 
   const refreshTags = async () => {
     try {
