@@ -26,7 +26,7 @@ the code behind `?dev=1` on the pane URL, which only the localhost manifest uses
 The pane falls back to the web tool's `/fee-proposals/generate` when the backend does not
 have the add-in endpoint yet, so "New document" works against today's Railway deploy.
 
-## Ship it (same route as the Mail Marshal Outlook add-in)
+## Ship it
 
 1. Backend: cherry-pick the commit that adds `routers/word_fee.py` and its two lines in
    `main.py` onto `master` (Railway deploys master). It has no other dependencies.
@@ -35,29 +35,31 @@ have the add-in endpoint yet, so "New document" works against today's Railway de
    `public/addin/word/`.
 3. Check https://fd-toolstation.vercel.app/addin/word loads (preview mode in a browser) and
    https://fd-toolstation.vercel.app/backend/fee-proposals/engineers returns the list.
-4. Deploy the manifest into Exchange's organisation app catalogue, which is the list desktop
-   Word reads. In PowerShell 7 (`pwsh`), with the ExchangeOnlineManagement module installed:
+4. [Microsoft 365 admin center](https://admin.microsoft.com/#/Settings/IntegratedApps) >
+   Integrated apps > Upload custom apps > Office Add-in > upload `addin/manifest.word.xml`.
+   Assign to Everyone, accept, deploy. On 10 Sep 2026 it reached Word about 90 minutes
+   after upload; Microsoft quotes up to 24 hours. Users see **Fee Proposal** on the Home
+   tab after restarting Word (Word only asks for the catalogue at launch).
 
-   ```powershell
-   Connect-ExchangeOnline -UserPrincipalName <admin upn>
-   $bytes = [IO.File]::ReadAllBytes('addin\manifest.word.xml')
-   New-App -OrganizationApp -FileData $bytes -Enabled $true -DefaultStateForUser Enabled -ProvidedTo Everyone
-   Get-App -OrganizationApp | Where-Object DisplayName -like 'FD*'
-   ```
+   Gotchas found 9-10 Sep 2026:
+   - Exchange validates the manifest behind the scenes and only knows Outlook requirement
+     sets: a `<Requirements><Set Name="WordApi">` block makes the deployment show "OK" in
+     the admin center but never propagate. The manifests carry no Requirements element;
+     the pane checks `WordApi 1.3` at runtime instead. `<Version>` must be 1.0 or higher.
+   - Do not also deploy with `New-App -OrganizationApp` (Exchange PowerShell). The two
+     routes share the add-in ID and block each other, and the Exchange route never
+     reached Word or Word Online in 25 hours on this tenant. If an Exchange entry exists,
+     `Remove-App -OrganizationApp` it before uploading in Integrated apps.
+   - `Get-App -Mailbox` lists Outlook add-ins only; it never shows a Word add-in. To
+     confirm delivery on a PC, look for the add-in ID under
+     `%LOCALAPPDATA%\Microsoft\Office.0\Wef\` after a Word launch (a developer
+     sideload also caches there, so remove it first).
+   - Sideload for testing without waiting: registry value under
+     `HKCU\Software\Microsoft\Office.0\WEF\Developer` pointing at the manifest
+     (`addin/sideload-word.ps1` does this for the localhost manifest), then restart Word.
 
-   It appears in desktop Word within a few hours as **Fee Proposal** on the Home tab; users
-   may need to restart Word once. Later manifest changes go through `Set-App -OrganizationApp
-   -Identity <id> -FileData $bytes`; removal through `Remove-App -OrganizationApp`.
-
-   Gotchas found 9 Sep 2026: the admin center's Integrated apps upload showed "OK" but never
-   reached Exchange, and `New-App` explained why: Exchange's manifest validator rejects a
-   `<Requirements><Set Name="WordApi">` block (it only knows Outlook's sets). The manifests
-   therefore carry no Requirements element; the pane checks `WordApi 1.3` at runtime instead.
-   `<Version>` must be 1.0 or higher for the validator. Verify what Word will see with
-   `Get-App -OrganizationApp`, and what a user sees with `Get-App -Mailbox <upn>`.
-
-Manifest changes (name, icon URLs, button label, `Version`) need `Set-App`; pane code
-changes deploy with the app. Bump `<Version>` when re-uploading.
+Manifest changes (name, icon URLs, button label, `Version`) go through Integrated apps >
+the add-in > Update; bump `<Version>` first. Pane code changes deploy with the app.
 
 No sign-in: the pane is public like the rest of fd-toolstation, and the backend is the same
 Railway API the web tool calls.
