@@ -52,10 +52,10 @@ have the add-in endpoint yet, so "New document" works against today's Railway de
      `Remove-App -OrganizationApp` it before uploading in Integrated apps.
    - `Get-App -Mailbox` lists Outlook add-ins only; it never shows a Word add-in. To
      confirm delivery on a PC, look for the add-in ID under
-     `%LOCALAPPDATA%\Microsoft\Office.0\Wef\` after a Word launch (a developer
+     `%LOCALAPPDATA%\Microsoft\Office\16.0\Wef\` after a Word launch (a developer
      sideload also caches there, so remove it first).
    - Sideload for testing without waiting: registry value under
-     `HKCU\Software\Microsoft\Office.0\WEF\Developer` pointing at the manifest
+     `HKCU\Software\Microsoft\Office\16.0\WEF\Developer` pointing at the manifest
      (`addin/sideload-word.ps1` does this for the localhost manifest), then restart Word.
 
 Manifest changes (name, icon URLs, button label, `Version`) go through Integrated apps >
