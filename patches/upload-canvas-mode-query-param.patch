@@ -1,0 +1,134 @@
+From 2d9b84baf0b0ab798e45592f9a48ba271d5d02e0 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursor-agent@local>
+Date: Thu, 17 Sep 2026 19:51:33 +0000
+Subject: [PATCH] Add ?mode= deep-link bootstrap for Upload Canvas parts.
+
+/?mode=efs (also fdsGen, radiation, timeEq) skips Choose Mode and
+lands in that registered part so toolstation search can open External
+Fire Spread rather than the canvas shell.
+---
+ __tests__/mode-from-url.test.js | 42 +++++++++++++++++++++++++++++++++
+ pages/index.jsx                 | 12 ++++++++++
+ utils/modeFromUrl.js            | 24 +++++++++++++++++++
+ 3 files changed, 78 insertions(+)
+ create mode 100644 __tests__/mode-from-url.test.js
+ create mode 100644 utils/modeFromUrl.js
+
+diff --git a/__tests__/mode-from-url.test.js b/__tests__/mode-from-url.test.js
+new file mode 100644
+index 0000000..7ce8377
+--- /dev/null
++++ b/__tests__/mode-from-url.test.js
+@@ -0,0 +1,42 @@
++import { describe, it, expect } from 'vitest'
++import { bootFromModeParam, modeFromSearch } from '../utils/modeFromUrl'
++
++describe('modeFromSearch', () => {
++  it('reads a registered mode from the query string', () => {
++    expect(modeFromSearch('?mode=efs')).toBe('efs')
++    expect(modeFromSearch('mode=fdsGen')).toBe('fdsGen')
++    expect(modeFromSearch('?foo=1&mode=radiation')).toBe('radiation')
++    expect(modeFromSearch('?mode=timeEq')).toBe('timeEq')
++  })
++
++  it('ignores missing or unknown modes', () => {
++    expect(modeFromSearch('')).toBeNull()
++    expect(modeFromSearch('?q=efs')).toBeNull()
++    expect(modeFromSearch('?mode=nope')).toBeNull()
++    expect(modeFromSearch(undefined)).toBeNull()
++  })
++})
++
++describe('bootFromModeParam', () => {
++  it('sends scratch modes (efs, radiation) to the upload screen and skips the mode popup', () => {
++    expect(bootFromModeParam('?mode=efs')).toEqual({
++      mode: 'efs',
++      showModePopup: false,
++      showUploadScreen: true,
++    })
++    expect(bootFromModeParam('?mode=radiation')).toEqual({
++      mode: 'radiation',
++      showModePopup: false,
++      showUploadScreen: true,
++    })
++  })
++
++  it('sends DB-backed modes to their dashboard, not the upload screen', () => {
++    expect(bootFromModeParam('?mode=fdsGen')).toEqual({
++      mode: 'fdsGen',
++      showModePopup: false,
++      showUploadScreen: false,
++    })
++    expect(bootFromModeParam('?mode=timeEq').showUploadScreen).toBe(false)
++  })
++})
+diff --git a/pages/index.jsx b/pages/index.jsx
+index 3458f1c..4e6754f 100644
+--- a/pages/index.jsx
++++ b/pages/index.jsx
+@@ -14,6 +14,7 @@ import FdsCodeView from '../Components/FdsCodeView'
+ import ProjectDashboard from '../Components/ProjectDashboard'
+ import useUserName from '../hooks/useUserName'
+ import { isDbBacked, autosaveSnapshot } from '../store/persistenceModes'
++import { bootFromModeParam } from '../utils/modeFromUrl'
+ import { savePdfToIndexedDB, loadPdfFromIndexedDB } from '../utils/pdfStorage'
+ import { computeFramingScroll, elementPixelBox } from '../utils/viewportFraming'
+ import {
+@@ -105,6 +106,7 @@ export default function Home() {
+ 
+   const [showModePopup, setShowModePopup] = useState(false)
+   const currentMode = useStore((state) => state.currentMode)
++  const setCurrentMode = useStore((state) => state.setCurrentMode)
+   const viewMode = useStore((state) => state.viewMode)
+   const setPdfCanvasRef = useStore((state) => state.setPdfCanvasRef)
+   const pdfCanvasRefLocal = useRef()
+@@ -380,6 +382,16 @@ export default function Home() {
+     setShowUploadScreen(!isDbBacked(mode))
+   }
+ 
++  // Deep link: /?mode=efs (also fdsGen | radiation | timeEq) skips Choose Mode
++  // and lands in that part. Unknown/missing params leave the existing boot path.
++  useEffect(() => {
++    const boot = bootFromModeParam(window.location.search)
++    if (!boot) return
++    setCurrentMode(boot.mode)
++    setShowModePopup(boot.showModePopup)
++    handleModeSelected(boot.mode)
++  }, [setCurrentMode])
++
+   const handleBackToDashboard = () => {
+     // Go back to dashboard without destroying project data
+     setSelectedFile(undefined)
+diff --git a/utils/modeFromUrl.js b/utils/modeFromUrl.js
+new file mode 100644
+index 0000000..93e6a9b
+--- /dev/null
++++ b/utils/modeFromUrl.js
+@@ -0,0 +1,24 @@
++import { MODE_PERSISTENCE, isDbBacked } from '../store/persistenceModes'
++
++/**
++ * Deep-link bootstrap for Upload Canvas modes.
++ * `/?mode=efs` (also fdsGen | radiation | timeEq) lands in that part
++ * instead of the default fdsGen shell.
++ */
++export function modeFromSearch(search) {
++  if (!search) return null
++  const query = search.startsWith('?') ? search.slice(1) : search
++  const mode = new URLSearchParams(query).get('mode')
++  if (mode && MODE_PERSISTENCE[mode]) return mode
++  return null
++}
++
++export function bootFromModeParam(search) {
++  const mode = modeFromSearch(search)
++  if (!mode) return null
++  return {
++    mode,
++    showModePopup: false,
++    showUploadScreen: !isDbBacked(mode),
++  }
++}
+-- 
+2.43.0
+
