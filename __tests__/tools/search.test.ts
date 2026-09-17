@@ -1,5 +1,5 @@
-import { filterTools, searchTools } from '../../lib/tools/search';
-import { CATALOGUE, UPLOAD_CANVAS_ORIGIN } from '../../lib/tools/catalogue';
+import { filterTools, navigateToTool, searchTools } from '../../lib/tools/search';
+import { CATALOGUE, UPLOAD_CANVAS_ORIGIN, ctaLabel, partLabel } from '../../lib/tools/catalogue';
 import type { ToolPart } from '../../lib/tools/types';
 
 const sample: ToolPart[] = [
@@ -209,5 +209,40 @@ describe('searchTools — real catalogue', () => {
     expect(kinds.has('web')).toBe(true);
     expect(kinds.has('excel')).toBe(true);
     expect(kinds.has('desktop')).toBe(true);
+  });
+
+  it('CTA copy names the Upload Canvas part, not the shell', () => {
+    const efs = CATALOGUE.find((t) => t.id === 'upload-canvas-efs') as ToolPart;
+    expect(partLabel(efs)).toBe('Upload Canvas → External Fire Spread');
+    expect(ctaLabel(efs)).toBe('Open in External Fire Spread mode');
+  });
+});
+
+describe('navigateToTool', () => {
+  const open = jest.fn();
+
+  beforeEach(() => {
+    open.mockReset();
+    window.open = open as unknown as typeof window.open;
+  });
+
+  it('opens the efs mode deep link in a new tab', () => {
+    const efs = CATALOGUE.find((t) => t.id === 'upload-canvas-efs') as ToolPart;
+    const push = jest.fn();
+    navigateToTool(efs, { push });
+    expect(push).not.toHaveBeenCalled();
+    expect(open).toHaveBeenCalledWith(
+      `${UPLOAD_CANVAS_ORIGIN}/?mode=efs`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  });
+
+  it('pushes internal routes in the same tab', () => {
+    const calc = CATALOGUE.find((t) => t.id === 'efs-calculator') as ToolPart;
+    const push = jest.fn();
+    navigateToTool(calc, { push });
+    expect(push).toHaveBeenCalledWith('/external-firespread');
+    expect(open).not.toHaveBeenCalled();
   });
 });

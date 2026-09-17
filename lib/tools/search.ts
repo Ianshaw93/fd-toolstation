@@ -352,3 +352,13 @@ export function isInternalUrl(url: string): boolean {
 export function resolveOpenUrl(part: ToolPart): string | undefined {
   return part.deepLink || part.url;
 }
+
+export function navigateToTool(part: ToolPart, router: { push: (href: string) => void }): void {
+  const url = resolveOpenUrl(part);
+  if (!url) return;
+  if (isInternalUrl(url)) {
+    router.push(url);
+  } else if (typeof window !== 'undefined') {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}

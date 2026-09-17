@@ -332,6 +332,15 @@ export function partLabel(tool: ToolPart): string {
   return tool.dashboardTitle || tool.name;
 }
 
+/** Primary CTA copy for a part. Layouts should use this so prototypes stay consistent. */
+export function ctaLabel(tool: ToolPart): string {
+  if (tool.partKey) return `Open in ${tool.part} mode`;
+  const url = tool.deepLink || tool.url;
+  if (url?.startsWith('/')) return 'Open';
+  if (url) return 'Open App';
+  return 'How to open';
+}
+
 export const TOOL_KINDS: ToolKind[] = [
   'web',
   'excel',

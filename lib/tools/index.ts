@@ -4,6 +4,7 @@ export {
   CATALOGUE,
   UPLOAD_CANVAS_MODES,
   UPLOAD_CANVAS_ORIGIN,
+  ctaLabel,
   dashboardCards,
   legacyTools,
   partLabel,
@@ -12,6 +13,7 @@ export {
 export {
   filterTools,
   isInternalUrl,
+  navigateToTool,
   resolveOpenUrl,
   searchTools,
 } from './search';
