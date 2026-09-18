@@ -326,6 +326,7 @@ export function basedOnLine(sources: CalcSource[]): string | null {
 }
 
 function scorePart(query: string, queryTokens: string[], expanded: Set<string>, part: ToolPart): number {
+  if (part.shelved) return 0;
   if (part.legacy && !queryWantsLegacy(query, expanded) && !legacyHasDistinctiveHit(part, expanded)) {
     return 0;
   }
@@ -432,11 +433,12 @@ function confidenceFor(ranked: Ranked[], mode: SearchMode): Confidence {
 
 export function searchTools(query: string, tools: ToolPart[] = ALL_TOOLS): ToolSearchResult {
   const trimmed = query.trim();
+  const visible = tools.filter((tool) => !tool.shelved);
 
   if (!trimmed) {
     return {
       query: trimmed,
-      matches: tools.filter((tool) => tool.showOnDashboard && !tool.shelved),
+      matches: visible.filter((tool) => tool.showOnDashboard),
       suggestion: null,
       confidence: 'none',
       mode: 'browse',
@@ -448,7 +450,7 @@ export function searchTools(query: string, tools: ToolPart[] = ALL_TOOLS): ToolS
   const expanded = expandTokens(queryTokens);
   const mode: SearchMode = isNaturalLanguage(trimmed) ? 'intent' : 'keyword';
 
-  const ranked = tools
+  const ranked = visible
     .map((part) => ({ part, score: scorePart(trimmed, queryTokens, expanded, part) }))
     .filter((row) => row.score > 0)
     .sort((a, b) => {

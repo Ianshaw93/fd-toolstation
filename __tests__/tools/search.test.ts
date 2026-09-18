@@ -121,10 +121,9 @@ describe('filterTools', () => {
     expect(filterTools('bananas', sample)).toEqual([]);
   });
 
-  it('hides shelved tools from browse, but a query still finds them', () => {
-    expect(filterTools('', sample).map((t) => t.id)).toEqual(['sprinkler-grid', 'warehouse-smoke']);
-    expect(filterTools('secret', sample).map((t) => t.id)).toEqual(['secret-lab']);
-    expect(filterTools('Secret Lab', sample).map((t) => t.id)).toEqual(['secret-lab']);
+  it('excludes shelved tools even when they would otherwise match', () => {
+    expect(filterTools('secret', sample)).toEqual([]);
+    expect(filterTools('Secret Lab', sample)).toEqual([]);
   });
 });
 
@@ -147,20 +146,18 @@ describe('searchTools — real catalogue', () => {
     expect(result.matches.some((t) => t.id === 'cfd-dashboard')).toBe(false);
   });
 
-  it('short query "cfd" includes the CFD family even while the dashboard card is shelved', () => {
+  it('short query "cfd" includes post-processing and FDS gen, not the shelved dashboard', () => {
     const result = searchTools('cfd');
     const ids = result.matches.map((t) => t.id);
-    expect(ids).toEqual(
-      expect.arrayContaining(['cfd-dashboard', 'cfd-post-processing', 'upload-canvas-fdsGen']),
-    );
-    expect(result.matches.find((t) => t.id === 'cfd-dashboard')?.shelved).toBe(true);
+    expect(ids).toEqual(expect.arrayContaining(['cfd-post-processing', 'upload-canvas-fdsGen']));
+    expect(ids).not.toContain('cfd-dashboard');
   });
 
   it('short query "fds" includes the same CFD/FDS family the other way round', () => {
     const result = searchTools('fds');
-    expect(result.matches.map((t) => t.id)).toEqual(
-      expect.arrayContaining(['upload-canvas-fdsGen', 'cfd-dashboard', 'cfd-post-processing']),
-    );
+    const ids = result.matches.map((t) => t.id);
+    expect(ids).toEqual(expect.arrayContaining(['upload-canvas-fdsGen', 'cfd-post-processing']));
+    expect(ids).not.toContain('cfd-dashboard');
   });
 
   it('treats cfd and fds as bidirectional synonyms', () => {

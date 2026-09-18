@@ -181,7 +181,6 @@ export const CATALOGUE: ToolPart[] = [
     icon: '🖥️',
     liveStatus: 'cfd',
     showOnDashboard: true,
-    // Off the home carousel; still in search so `cfd` / `fds` family queries hit it.
     shelved: true,
   },
   {
