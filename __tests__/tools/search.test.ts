@@ -288,6 +288,27 @@ describe('searchTools — real catalogue', () => {
       expect(readFileSync(file, 'utf8')).not.toMatch(/\.slice\s*\(\s*0\s*,\s*3\s*\)/);
     }
   });
+
+  it('query "br" exposes a BR 187 / BRE 135 based-on line for radiation and EFS rows', () => {
+    const result = searchTools('br');
+    expect(result.basedOn['upload-canvas-radiation']).toMatch(/BR 187/i);
+    expect(result.basedOn['upload-canvas-efs']).toMatch(/BRE 135|BR 187/i);
+    expect(result.basedOn['efs-calculator']).toMatch(/BRE 135|BR 187/i);
+    expect(result.basedOn['warehouse-smoke']).toBeUndefined();
+  });
+
+  it('query "7974" shows a 7974 based-on line for warehouse, not the full source dump', () => {
+    const result = searchTools('7974');
+    expect(result.basedOn['warehouse-smoke']).toMatch(/7974/);
+    expect(result.basedOn['warehouse-smoke']).not.toMatch(/CIBSE/i);
+    expect(result.basedOn['warehouse-smoke']).not.toMatch(/Drysdale/i);
+    expect(result.suggestion?.basedOn).toMatch(/7974/);
+  });
+
+  it('name-only hits omit the based-on line', () => {
+    const result = searchTools('sprinkler');
+    expect(result.basedOn['sprinkler-grid']).toBeUndefined();
+  });
 });
 
 describe('navigateToTool', () => {

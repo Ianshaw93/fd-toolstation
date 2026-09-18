@@ -19,6 +19,11 @@ export default function FilterGridLayout({ result, onOpen, cfdStatus = null }: T
           <p className="text-sm text-blue-800 mb-1">You&apos;re likely looking for:</p>
           <h2 className="text-xl font-semibold text-gray-900">{result.suggestion.label}</h2>
           <p className="text-sm text-gray-600 mt-2">{result.suggestion.why}</p>
+          {result.suggestion.basedOn && (
+            <p className="text-xs text-blue-700 mt-2" data-testid="suggestion-calc-source">
+              {result.suggestion.basedOn}
+            </p>
+          )}
           <div className="mt-4 flex flex-wrap gap-3">
             {suggestionUrl && (
               <button

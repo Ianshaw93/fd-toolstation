@@ -73,4 +73,22 @@ describe('CommandPaletteLayout', () => {
     expect(document.querySelector('[data-tool-id="efs-calculator"]')).toBeInTheDocument();
     expect(document.querySelector('[data-tool-id="upload-canvas-efs"]')).toBeInTheDocument();
   });
+
+  it('shows a Based on BR 187 line under radiation / EFS rows for query "br"', () => {
+    const result = searchTools('br');
+    render(<CommandPaletteLayout result={result} onOpen={jest.fn()} />);
+    expect(screen.getByTestId('calc-source-upload-canvas-radiation')).toHaveTextContent(/Based on.*BR 187/i);
+    expect(screen.getByTestId('calc-source-efs-calculator').textContent).toMatch(/BR 187|BRE 135/);
+    expect(screen.getByTestId('calc-source-upload-canvas-efs').textContent).toMatch(/BR 187|BRE 135/);
+    expect(screen.queryByTestId('calc-source-sprinkler-grid')).not.toBeInTheDocument();
+  });
+
+  it('shows a Based on 7974 line under warehouse for query "7974"', () => {
+    const result = searchTools('7974');
+    render(<CommandPaletteLayout result={result} onOpen={jest.fn()} />);
+    const line = screen.getByTestId('calc-source-warehouse-smoke');
+    expect(line).toHaveTextContent(/Based on.*7974/);
+    expect(line).not.toHaveTextContent(/CIBSE/i);
+    expect(screen.getByTestId('suggestion-calc-source')).toHaveTextContent(/7974/);
+  });
 });

@@ -17,7 +17,10 @@ export {
   navigateToTool,
   resolveOpenUrl,
   searchTools,
+  basedOnLine,
+  matchingCalcSources,
 } from './search';
+export { CALC_SOURCES } from './calc-sources';
 export {
   TOOL_SEARCH_DEBOUNCE_MS,
   ensureSearchLogged,

@@ -83,6 +83,11 @@ function CommandPalettePanel({ result, onOpen }: ToolSearchLayoutProps) {
             <p className="text-sm text-blue-800 mb-1">You&apos;re likely looking for:</p>
             <h2 className="text-lg font-semibold text-gray-900">{suggestion.label}</h2>
             <p className="text-sm text-gray-600 mt-1">{suggestion.why}</p>
+            {suggestion.basedOn && (
+              <p className="text-xs text-blue-700 mt-1" data-testid="suggestion-calc-source">
+                {suggestion.basedOn}
+              </p>
+            )}
             <div className="mt-3 flex flex-wrap gap-3">
               {suggestionUrl && (
                 <button
@@ -109,7 +114,7 @@ function CommandPalettePanel({ result, onOpen }: ToolSearchLayoutProps) {
             id="tool-search-palette"
             role="listbox"
             aria-label="Matching tools"
-            className="max-h-[28rem] overflow-y-auto py-1"
+            className="max-h-[36rem] overflow-y-auto py-1"
             data-match-count={items.length}
           >
             {items.map((tool, index) => {
@@ -141,6 +146,14 @@ function CommandPalettePanel({ result, onOpen }: ToolSearchLayoutProps) {
                     <span className="mt-0.5 block text-sm text-gray-600 line-clamp-2">
                       {tool.description}
                     </span>
+                    {result.basedOn[tool.id] && (
+                      <span
+                        className="mt-0.5 block text-xs text-blue-700"
+                        data-testid={`calc-source-${tool.id}`}
+                      >
+                        {result.basedOn[tool.id]}
+                      </span>
+                    )}
                   </span>
                 </div>
               );

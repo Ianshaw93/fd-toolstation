@@ -24,6 +24,7 @@ const canvasModes: Array<{
   description: string;
   aliases: string[];
   phrases: string[];
+  calcSourceIds: string[];
 }> = [
   {
     partKey: 'fdsGen',
@@ -43,6 +44,7 @@ const canvasModes: Array<{
       'fds-smv',
     ],
     phrases: ['generate fds', 'fds from a plan', 'draw meshes on a plan'],
+    calcSourceIds: ['nist-fds'],
   },
   {
     partKey: 'radiation',
@@ -59,6 +61,7 @@ const canvasModes: Array<{
       'br-187',
     ],
     phrases: ['radiation on a plan', 'heat flux drawing', 'br 187 view factor'],
+    calcSourceIds: ['br-187'],
   },
   {
     partKey: 'timeEq',
@@ -85,6 +88,7 @@ const canvasModes: Array<{
       'time equivalence reliability',
     ],
     phrases: ['time equivalence canvas', 'time eq on a plan', 'eurocode time equivalence'],
+    calcSourceIds: ['ec1-annex-a', 'pd-6688', 'iso-834', 'quintiere'],
   },
   {
     partKey: 'efs',
@@ -111,6 +115,7 @@ const canvasModes: Array<{
       'draw on plans for external fire spread',
       'upload canvas efs',
     ],
+    calcSourceIds: ['bre-135', 'br-187'],
   },
 ];
 
@@ -125,6 +130,7 @@ const uploadCanvasParts: ToolPart[] = canvasModes.map((mode) => ({
   description: mode.description,
   aliases: mode.aliases,
   phrases: mode.phrases,
+  calcSourceIds: mode.calcSourceIds,
   deepLink: uploadCanvasModeUrl(mode.partKey),
   url: uploadCanvasModeUrl(mode.partKey),
   openHint:
@@ -294,6 +300,7 @@ export const CATALOGUE: ToolPart[] = [
     deepLink: '/external-firespread',
     icon: '🔥',
     showOnDashboard: true,
+    calcSourceIds: ['bre-135', 'br-187'],
   },
   {
     id: 'warehouse-smoke',
@@ -327,6 +334,7 @@ export const CATALOGUE: ToolPart[] = [
     deepLink: '/warehouse-smoke',
     icon: '🏭',
     showOnDashboard: true,
+    calcSourceIds: ['bs-pd-7974', 'cibse-guide-e', 'drysdale'],
   },
   {
     id: 'efs-excel-v6',
@@ -353,6 +361,7 @@ export const CATALOGUE: ToolPart[] = [
       'Open from Dropbox: 07 Technical Tools / 4. Clever Ideas - External / VBA Shed Fire Strategy / version 5 / input_sheet_and_tables_v6.xlsm. Use the External Spread tab.',
     icon: '📗',
     legacy: true,
+    calcSourceIds: ['br-187', 'bre-135'],
   },
   {
     id: 'efs-desktop-gui',
@@ -371,6 +380,7 @@ export const CATALOGUE: ToolPart[] = [
       'Run main_efs_gui.py in localProgramming/fd/external_firespread. Tab 6 is External Fire Spread (BRE 135).',
     icon: '🖥️',
     legacy: true,
+    calcSourceIds: ['bre-135', 'br-187'],
   },
   {
     id: 'warehouse-smoke-python',

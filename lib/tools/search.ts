@@ -1,4 +1,5 @@
 import { ALL_TOOLS, partLabel } from './catalogue';
+import { resolveCalcSources, type CalcSource } from './calc-sources';
 import type { Confidence, SearchMode, ToolPart, ToolSearchResult, ToolSuggestion } from './types';
 
 /**
@@ -287,6 +288,33 @@ function aliasesHavePrefix(aliases: string[], query: string): boolean {
   return aliases.some((alias) => textHasPrefix(alias, query));
 }
 
+export function matchingCalcSources(
+  part: ToolPart,
+  query: string,
+  queryTokens: string[],
+  expanded: Set<string>,
+): CalcSource[] {
+  const q = normalize(query);
+  const cq = compactAlnum(query);
+  return resolveCalcSources(part.calcSourceIds).filter((source) =>
+    source.match.some((raw) => {
+      const n = normalize(raw);
+      const c = compactAlnum(raw);
+      if (expanded.has(n) || expanded.has(c)) return true;
+      if (queryTokens.includes(n) || queryTokens.includes(c)) return true;
+      if (q.length >= 2 && (n === q || c === cq || n.startsWith(q) || c.startsWith(cq))) return true;
+      return queryTokens.some(
+        (token) => token.length >= 2 && (n === token || n.startsWith(token) || c.startsWith(token)),
+      );
+    }),
+  );
+}
+
+export function basedOnLine(sources: CalcSource[]): string | null {
+  if (sources.length === 0) return null;
+  return `Based on ${sources.map((source) => source.blurb).join(' + ')}`;
+}
+
 function scorePart(query: string, queryTokens: string[], expanded: Set<string>, part: ToolPart): number {
   if (part.shelved) return 0;
   if (part.legacy && !queryWantsLegacy(query, expanded) && !legacyHasDistinctiveHit(part, expanded)) {
@@ -373,6 +401,7 @@ function suggestionFor(
   ranked: Ranked[],
   mode: SearchMode,
   confidence: Confidence,
+  basedOn: Record<string, string>,
 ): ToolSuggestion | null {
   if (ranked.length === 0) return null;
   if (mode !== 'intent' && confidence === 'low') return null;
@@ -381,6 +410,7 @@ function suggestionFor(
     part: top,
     label: partLabel(top),
     why: whyFor(top),
+    basedOn: basedOn[top.id] ?? null,
   };
 }
 
@@ -405,6 +435,7 @@ export function searchTools(query: string, tools: ToolPart[] = ALL_TOOLS): ToolS
       suggestion: null,
       confidence: 'none',
       mode: 'browse',
+      basedOn: {},
     };
   }
 
@@ -423,13 +454,19 @@ export function searchTools(query: string, tools: ToolPart[] = ALL_TOOLS): ToolS
 
   const collapsed = collapseParents(ranked);
   const confidence = confidenceFor(collapsed, mode);
+  const basedOn: Record<string, string> = {};
+  for (const row of collapsed) {
+    const line = basedOnLine(matchingCalcSources(row.part, trimmed, queryTokens, expanded));
+    if (line) basedOn[row.part.id] = line;
+  }
 
   return {
     query: trimmed,
     matches: collapsed.map((row) => row.part),
-    suggestion: suggestionFor(collapsed, mode, confidence),
+    suggestion: suggestionFor(collapsed, mode, confidence, basedOn),
     confidence,
     mode,
+    basedOn,
   };
 }
 
