@@ -102,6 +102,17 @@ function CommandPalettePanel({ result, onOpen }: ToolSearchLayoutProps) {
                 <p className="text-sm text-gray-700">{suggestion.part.openHint}</p>
               )}
             </div>
+            {suggestionUrl && (
+              <a
+                href={suggestionUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 block font-mono text-[11px] text-gray-500 break-all hover:text-blue-700"
+                data-testid="suggestion-open-url"
+              >
+                {suggestionUrl}
+              </a>
+            )}
           </div>
         )}
 

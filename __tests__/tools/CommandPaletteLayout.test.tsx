@@ -24,6 +24,11 @@ describe('CommandPaletteLayout', () => {
     expect(suggestion).toHaveTextContent('Upload Canvas → External Fire Spread');
     expect(screen.getByRole('button', { name: 'Open in External Fire Spread mode' })).toBeInTheDocument();
 
+    expect(screen.getByTestId('suggestion-open-url')).toHaveTextContent(
+      'https://upload-canvas.vercel.app/?mode=efs',
+    );
+    expect(screen.getByTestId('suggestion-open-url').textContent).not.toContain('upload-canvas-git-dev');
+
     await userEvent.click(screen.getByRole('button', { name: 'Open in External Fire Spread mode' }));
     expect(onOpen).toHaveBeenCalledWith(
       expect.objectContaining({

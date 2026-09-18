@@ -76,6 +76,9 @@ describe('ToolBrowser search', () => {
     expect(suggestion).toHaveTextContent("You're likely looking for:");
     expect(suggestion).toHaveTextContent('Upload Canvas → External Fire Spread');
     expect(screen.getByRole('button', { name: 'Open in External Fire Spread mode' })).toBeInTheDocument();
+    expect(screen.getByTestId('suggestion-open-url')).toHaveTextContent(
+      'https://upload-canvas.vercel.app/?mode=efs',
+    );
     await user.click(screen.getByRole('button', { name: 'Open in External Fire Spread mode' }));
     expect(open).toHaveBeenCalledWith(
       `${UPLOAD_CANVAS_ORIGIN}/?mode=efs`,
