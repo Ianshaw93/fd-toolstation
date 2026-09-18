@@ -62,11 +62,21 @@ const SYNONYM_GROUPS: string[][] = [
   ['site right', 'site visit', 'site-right'],
   ['canvas', 'markup', 'upload canvas', 'pdf markup', 'annotation'],
   ['time eq', 'time equivalence', 'timeeq', 'time-eq', 'time-equivalence'],
-  ['fds', 'fds gen', 'fdsgen', 'fds generation'],
+  // Fire-engineering CFD here is FDS; queries for either should hit the other.
+  ['cfd', 'fds', 'fds gen', 'fdsgen', 'fds generation'],
   ['sprinkler', 'sprinklers'],
   ['fee proposal', 'fee', 'fees'],
   ['draw', 'drawing', 'drawn', 'annotate'],
   ['plan', 'plans'],
+  ['macs', 'macs+', 'macs plus', 'i-macs', 'imacs'],
+  [
+    'cfd post processing',
+    'cfdreportgen',
+    'cfd report gen',
+    'charts gen',
+    'fds figures',
+    'common corridor report',
+  ],
 ];
 
 const LEGACY_QUERY_TOKENS = [

@@ -28,6 +28,7 @@ export interface ToolPart {
   showOnDashboard?: boolean;
   dashboardTitle?: string;
   dashboardDescription?: string;
+  /** Hidden from browse and search. */
   shelved?: boolean;
   liveStatus?: 'cfd';
   hasLaunchButton?: boolean;

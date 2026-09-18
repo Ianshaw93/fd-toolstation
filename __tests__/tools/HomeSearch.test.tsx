@@ -30,6 +30,7 @@ describe('ToolBrowser search', () => {
 
   it('shows dashboard cards when the query is empty', () => {
     render(<ToolBrowser />);
+    expect(screen.queryByRole('heading', { name: 'CFD Dashboard' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Sprinkler Grid Calculator' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'PDF Markup Tools' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Warehouse Smoke Layer' })).toBeInTheDocument();
@@ -99,5 +100,32 @@ describe('ToolBrowser search', () => {
     expect(screen.getAllByRole('option').length).toBeGreaterThan(3);
     expect(document.querySelector('[data-tool-id="efs-calculator"]')).toBeInTheDocument();
     expect(document.querySelector('[data-tool-id="upload-canvas-efs"]')).toBeInTheDocument();
+  });
+
+  it('searching cfd, macs, and a post-processing phrase shows the expected hits', async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<ToolBrowser />);
+    const typeQuery = async (query: string) => {
+      const input = screen.getByPlaceholderText('Search tools...');
+      await user.clear(input);
+      await user.type(input, query);
+    };
+
+    await typeQuery('cfd');
+    expect(document.querySelector('[data-tool-id="cfd-dashboard"]')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-tool-id="cfd-post-processing"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-tool-id="upload-canvas-fdsGen"]')).toBeInTheDocument();
+
+    await typeQuery('fds');
+    expect(document.querySelector('[data-tool-id="upload-canvas-fdsGen"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-tool-id="cfd-dashboard"]')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-tool-id="cfd-post-processing"]')).toBeInTheDocument();
+
+    await typeQuery('macs');
+    expect(document.querySelector('[data-tool-id="i-macs"]')).toBeInTheDocument();
+
+    await typeQuery('cfd post');
+    expect(document.querySelector('[data-tool-id="cfd-post-processing"]')).toBeInTheDocument();
+    unmount();
   });
 });
