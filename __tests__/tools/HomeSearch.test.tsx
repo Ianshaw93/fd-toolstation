@@ -30,7 +30,7 @@ describe('ToolBrowser search', () => {
 
   it('shows dashboard cards when the query is empty', () => {
     render(<ToolBrowser />);
-    expect(screen.getByRole('heading', { name: 'CFD Dashboard' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'CFD Dashboard' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Sprinkler Grid Calculator' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'PDF Markup Tools' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Warehouse Smoke Layer' })).toBeInTheDocument();

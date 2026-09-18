@@ -121,9 +121,10 @@ describe('filterTools', () => {
     expect(filterTools('bananas', sample)).toEqual([]);
   });
 
-  it('excludes shelved tools even when they would otherwise match', () => {
-    expect(filterTools('secret', sample)).toEqual([]);
-    expect(filterTools('Secret Lab', sample)).toEqual([]);
+  it('hides shelved tools from browse, but a query still finds them', () => {
+    expect(filterTools('', sample).map((t) => t.id)).toEqual(['sprinkler-grid', 'warehouse-smoke']);
+    expect(filterTools('secret', sample).map((t) => t.id)).toEqual(['secret-lab']);
+    expect(filterTools('Secret Lab', sample).map((t) => t.id)).toEqual(['secret-lab']);
   });
 });
 
@@ -135,7 +136,6 @@ describe('searchTools — real catalogue', () => {
     expect(result.matches.map((t) => t.dashboardTitle || t.name)).toEqual(
       expect.arrayContaining([
         'Search & Rescue Bot',
-        'CFD Dashboard',
         'Site Visit App Report Generator',
         'Sprinkler Grid Calculator',
         'PDF Markup Tools',
@@ -144,16 +144,16 @@ describe('searchTools — real catalogue', () => {
         'Warehouse Smoke Layer',
       ]),
     );
-    expect(result.matches.some((t) => t.id === 'cfd-dashboard')).toBe(true);
+    expect(result.matches.some((t) => t.id === 'cfd-dashboard')).toBe(false);
   });
 
-  it('short query "cfd" includes the CFD family: dashboard, post-processing, and FDS gen', () => {
+  it('short query "cfd" includes the CFD family even while the dashboard card is shelved', () => {
     const result = searchTools('cfd');
     const ids = result.matches.map((t) => t.id);
     expect(ids).toEqual(
       expect.arrayContaining(['cfd-dashboard', 'cfd-post-processing', 'upload-canvas-fdsGen']),
     );
-    expect(result.matches.find((t) => t.id === 'cfd-dashboard')?.shelved).toBeFalsy();
+    expect(result.matches.find((t) => t.id === 'cfd-dashboard')?.shelved).toBe(true);
   });
 
   it('short query "fds" includes the same CFD/FDS family the other way round', () => {

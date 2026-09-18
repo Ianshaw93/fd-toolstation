@@ -7,6 +7,7 @@ import { searchTools } from '../../lib/tools/search';
  *
  * `cfd` / `fds` are the same family: fire-engineering CFD here uses FDS, so
  * either query must hit dashboard, post-processing, and FDS generation.
+ * CFD Dashboard stays shelved from the home carousel but remains in this eval.
  */
 export const SEARCH_COVERAGE_EVAL: Array<{ query: string; expectedIds: string[] }> = [
   {
