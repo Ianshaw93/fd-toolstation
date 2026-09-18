@@ -1,6 +1,5 @@
-import type { CfdDashboardState } from '../../lib/cfd-api';
-import type { ToolSearchResult } from '../../lib/tools/types';
-import type { ToolPart } from '../../lib/tools/types';
+import type { CfdDashboardState } from '../../../lib/cfd-api';
+import type { ToolSearchResult, ToolPart } from '../../../lib/tools/types';
 
 /**
  * Props every search-results prototype must accept.
