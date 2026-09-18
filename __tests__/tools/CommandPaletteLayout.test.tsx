@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CommandPaletteLayout, { paletteItems } from '../../components/home/search-layouts/CommandPaletteLayout';
 import { searchTools } from '../../lib/tools/search';
-import { UPLOAD_CANVAS_ORIGIN } from '../../lib/tools/catalogue';
+import { UPLOAD_CANVAS_DEV_ORIGIN } from '../../lib/tools/catalogue';
 
 describe('paletteItems', () => {
   it('puts the suggested part first without duplicating it', () => {
@@ -28,7 +28,7 @@ describe('CommandPaletteLayout', () => {
     expect(onOpen).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'upload-canvas-efs',
-        deepLink: `${UPLOAD_CANVAS_ORIGIN}/?mode=efs`,
+        deepLink: `${UPLOAD_CANVAS_DEV_ORIGIN}/?mode=efs`,
       }),
     );
   });
@@ -57,5 +57,20 @@ describe('CommandPaletteLayout', () => {
     expect(screen.getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true');
     await user.keyboard('{Enter}');
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'sprinkler-grid' }));
+  });
+
+  it('lists more than 3 matches for query "br" and does not slice the matcher output', () => {
+    const result = searchTools('br');
+    const items = paletteItems(result);
+    expect(result.matches.length).toBeGreaterThan(3);
+    expect(items.length).toBeGreaterThan(3);
+    expect(items.map((item) => item.id)).toEqual(
+      expect.arrayContaining(['efs-calculator', 'upload-canvas-efs']),
+    );
+
+    render(<CommandPaletteLayout result={result} onOpen={jest.fn()} />);
+    expect(screen.getAllByRole('option').length).toBeGreaterThan(3);
+    expect(document.querySelector('[data-tool-id="efs-calculator"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-tool-id="upload-canvas-efs"]')).toBeInTheDocument();
   });
 });

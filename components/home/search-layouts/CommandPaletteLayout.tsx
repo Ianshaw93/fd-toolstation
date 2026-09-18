@@ -109,7 +109,8 @@ function CommandPalettePanel({ result, onOpen }: ToolSearchLayoutProps) {
             id="tool-search-palette"
             role="listbox"
             aria-label="Matching tools"
-            className="max-h-80 overflow-y-auto py-1"
+            className="max-h-[28rem] overflow-y-auto py-1"
+            data-match-count={items.length}
           >
             {items.map((tool, index) => {
               const active = index === activeIndex;

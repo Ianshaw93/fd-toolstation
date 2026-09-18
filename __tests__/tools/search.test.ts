@@ -1,5 +1,13 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { filterTools, navigateToTool, searchTools } from '../../lib/tools/search';
-import { CATALOGUE, UPLOAD_CANVAS_ORIGIN, ctaLabel, partLabel } from '../../lib/tools/catalogue';
+import {
+  CATALOGUE,
+  UPLOAD_CANVAS_DEV_ORIGIN,
+  ctaLabel,
+  partLabel,
+  uploadCanvasModeUrl,
+} from '../../lib/tools/catalogue';
 import type { ToolPart } from '../../lib/tools/types';
 
 const sample: ToolPart[] = [
@@ -126,13 +134,38 @@ describe('searchTools — real catalogue', () => {
     );
   });
 
+  it('web Warehouse Smoke Layer supersedes the python script for query "warehouse"', () => {
+    const result = searchTools('warehouse');
+    expect(result.matches[0].id).toBe('warehouse-smoke');
+    expect(result.matches[0].kind).toBe('web');
+    expect(result.suggestion?.part.id).toBe('warehouse-smoke');
+    expect(result.matches.some((t) => t.id === 'warehouse-smoke-python')).toBe(false);
+    expect(result.suggestion?.why.toLowerCase()).not.toMatch(/dropbox/);
+  });
+
+  it('python / source queries still surface the original warehouse script', () => {
+    const result = searchTools('warehouse_smoke_layer.py');
+    expect(result.matches.some((t) => t.id === 'warehouse-smoke-python')).toBe(true);
+  });
+
+  it('efs uses the upload-canvas dev host, not production', () => {
+    const result = searchTools('external fire spread tool where I draw on warehouse plans');
+    const link = result.suggestion?.part.deepLink ?? '';
+    expect(link).toContain('upload-canvas-git-dev');
+    expect(link).toContain('mode=efs');
+    expect(link).not.toContain('https://upload-canvas.vercel.app');
+    expect(result.suggestion?.label).toMatch(/External Fire Spread/i);
+    expect(result.suggestion?.why).toMatch(/mode/i);
+    expect(result.suggestion?.why).not.toMatch(/dropbox/i);
+  });
+
   it('Ian NL phrase resolves to Upload Canvas → efs with mode in the deep link', () => {
     const result = searchTools('external fire spread tool where I draw on warehouse plans');
     expect(result.suggestion).not.toBeNull();
     expect(result.suggestion?.part.id).toBe('upload-canvas-efs');
     expect(result.suggestion?.label).toMatch(/Upload Canvas/i);
     expect(result.suggestion?.label).toMatch(/External Fire Spread/i);
-    expect(result.suggestion?.part.deepLink).toBe(`${UPLOAD_CANVAS_ORIGIN}/?mode=efs`);
+    expect(result.suggestion?.part.deepLink).toBe(`${UPLOAD_CANVAS_DEV_ORIGIN}/?mode=efs`);
     expect(result.suggestion?.part.deepLink).toContain('mode=efs');
     expect(result.matches[0].id).toBe('upload-canvas-efs');
   });
@@ -187,7 +220,7 @@ describe('searchTools — real catalogue', () => {
       const result = searchTools(query);
       const hit = result.matches.find((t) => t.id === id) ?? result.suggestion?.part;
       expect(hit?.id).toBe(id);
-      expect(hit?.deepLink).toBe(`${UPLOAD_CANVAS_ORIGIN}/?mode=${mode}`);
+      expect(hit?.deepLink).toBe(uploadCanvasModeUrl(mode as 'fdsGen' | 'radiation' | 'timeEq' | 'efs'));
     }
   });
 
@@ -213,8 +246,47 @@ describe('searchTools — real catalogue', () => {
 
   it('CTA copy names the Upload Canvas part, not the shell', () => {
     const efs = CATALOGUE.find((t) => t.id === 'upload-canvas-efs') as ToolPart;
-    expect(partLabel(efs)).toBe('Upload Canvas → External Fire Spread');
+    expect(partLabel(efs)).toBe('Upload Canvas → External Fire Spread (dev)');
     expect(ctaLabel(efs)).toBe('Open in External Fire Spread mode');
+  });
+
+  it('short query "br" returns more than 3 matches including calculator and canvas efs', () => {
+    const result = searchTools('br');
+    expect(result.matches.length).toBeGreaterThan(3);
+    expect(result.matches.some((t) => t.id === 'efs-calculator')).toBe(true);
+    expect(result.matches.some((t) => t.id === 'upload-canvas-efs')).toBe(true);
+    expect(result.matches.find((t) => t.id === 'upload-canvas-efs')?.deepLink).toContain(
+      'upload-canvas-git-dev',
+    );
+  });
+
+  it('short query "bre" includes upload-canvas-efs and the EFS calculator', () => {
+    const result = searchTools('bre');
+    expect(result.matches.length).toBeGreaterThan(3);
+    expect(result.matches.some((t) => t.id === 'upload-canvas-efs')).toBe(true);
+    expect(result.matches.some((t) => t.id === 'efs-calculator')).toBe(true);
+  });
+
+  it('query "7974" / "bs 7974" ranks Warehouse Smoke Layer web first, not python', () => {
+    for (const query of ['7974', 'bs 7974', 'pd 7974']) {
+      const result = searchTools(query);
+      expect(result.matches[0].id).toBe('warehouse-smoke');
+      expect(result.matches[0].kind).toBe('web');
+      expect(result.matches.some((t) => t.id === 'warehouse-smoke-python')).toBe(false);
+      expect(result.suggestion?.part.id).toBe('warehouse-smoke');
+      expect(result.suggestion?.why.toLowerCase()).not.toMatch(/dropbox/);
+    }
+  });
+
+  it('does not hard-cap matches at 3 in the matcher or layout source', () => {
+    const files = [
+      join(__dirname, '../../lib/tools/search.ts'),
+      join(__dirname, '../../components/home/search-layouts/CommandPaletteLayout.tsx'),
+      join(__dirname, '../../components/home/search-layouts/FilterGridLayout.tsx'),
+    ];
+    for (const file of files) {
+      expect(readFileSync(file, 'utf8')).not.toMatch(/\.slice\s*\(\s*0\s*,\s*3\s*\)/);
+    }
   });
 });
 
@@ -232,7 +304,7 @@ describe('navigateToTool', () => {
     navigateToTool(efs, { push });
     expect(push).not.toHaveBeenCalled();
     expect(open).toHaveBeenCalledWith(
-      `${UPLOAD_CANVAS_ORIGIN}/?mode=efs`,
+      `${UPLOAD_CANVAS_DEV_ORIGIN}/?mode=efs`,
       '_blank',
       'noopener,noreferrer',
     );

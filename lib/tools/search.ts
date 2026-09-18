@@ -49,7 +49,12 @@ const STOPWORDS = new Set([
 
 const SYNONYM_GROUPS: string[][] = [
   ['efs', 'external fire spread', 'external-firespread', 'external firespread', 'firespread'],
-  ['bre 135', 'bre135', 'bre-135'],
+  ['br', 'bre', 'bre 135', 'bre135', 'bre-135', 'br 187', 'br187', 'br-187'],
+  ['bs 7974', 'pd 7974', '7974', '7974-1', '7974-6', 'pd 7974-1', 'bs 7974-6', 'pd 7974-6'],
+  ['cibse', 'cibse guide e', 'guide e'],
+  ['drysdale', 'introduction to fire dynamics'],
+  ['en 1991', 'en1991', 'eurocode', 'eurocode 1', 'ec1', 'ec1 annex a'],
+  ['pd 6688', '6688'],
   ['aset', 'available safe egress time'],
   ['rset', 'required safe egress time'],
   ['mail marshal', 'email search', 'emails', 'search and rescue', 'search & rescue'],
@@ -61,6 +66,19 @@ const SYNONYM_GROUPS: string[][] = [
   ['fee proposal', 'fee', 'fees'],
   ['draw', 'drawing', 'drawn', 'annotate'],
   ['plan', 'plans'],
+];
+
+const LEGACY_QUERY_TOKENS = [
+  'python',
+  'excel',
+  'xlsm',
+  'vba',
+  'dropbox',
+  'script',
+  'tkinter',
+  'exe',
+  'desktop',
+  'gui',
 ];
 
 type IntentRule = {
@@ -90,7 +108,7 @@ const INTENT_RULES: IntentRule[] = [
   {
     partId: 'warehouse-smoke',
     weight: 55,
-    all: [['warehouse', 'shed', 'smoke'], ['smoke', 'aset', 'rset', 'layer', 'tenability']],
+    all: [['warehouse', 'shed', 'smoke', '7974', 'cibse', 'drysdale'], ['smoke', 'aset', 'rset', 'layer', 'tenability', '7974', 'cibse', 'drysdale']],
   },
   {
     partId: 'site-visit-report',
@@ -128,24 +146,48 @@ export function tokenize(text: string): string[] {
   return normalize(text).split(' ').filter(Boolean);
 }
 
+export function compactAlnum(text: string): string {
+  return normalize(text).replace(/\s+/g, '');
+}
+
 export function contentTokens(text: string): string[] {
   return tokenize(text).filter((token) => !STOPWORDS.has(token) && token.length > 1);
+}
+
+function synonymGroupHits(group: string[], tokens: string[], joined: string): boolean {
+  return group.some((term) => {
+    const termTokens = tokenize(term);
+    if (termTokens.length === 0) return false;
+    if (termTokens.every((termToken) => tokens.includes(termToken))) return true;
+    if (joined.includes(normalize(term))) return true;
+    return tokens.some(
+      (queryToken) =>
+        queryToken.length >= 3 &&
+        termTokens.some((termToken) => termToken.startsWith(queryToken) && termToken.length > queryToken.length),
+    );
+  });
 }
 
 export function expandTokens(tokens: string[]): Set<string> {
   const expanded = new Set(tokens);
   const joined = tokens.join(' ');
   for (const group of SYNONYM_GROUPS) {
-    const groupHits = group.some((term) => {
-      const termTokens = tokenize(term);
-      if (termTokens.length === 0) return false;
-      if (termTokens.every((termToken) => tokens.includes(termToken))) return true;
-      return joined.includes(normalize(term));
-    });
-    if (!groupHits) continue;
+    if (!synonymGroupHits(group, tokens, joined)) continue;
+    const singletons = new Set(
+      group.flatMap((term) => {
+        const termTokens = tokenize(term);
+        return termTokens.length === 1 ? termTokens : [];
+      }),
+    );
     for (const term of group) {
       expanded.add(normalize(term));
-      for (const termToken of tokenize(term)) expanded.add(termToken);
+      const compact = compactAlnum(term);
+      if (compact.length >= 2) expanded.add(compact);
+      for (const termToken of tokenize(term)) {
+        const distinctive = singletons.has(termToken) || tokens.includes(termToken) || /\d/.test(termToken);
+        if (!distinctive) continue;
+        if (termToken.length >= 3 || tokens.includes(termToken)) expanded.add(termToken);
+      }
     }
   }
   return expanded;
@@ -159,6 +201,7 @@ function fieldText(part: ToolPart): {
   title: string;
   part: string;
   aliases: string;
+  aliasList: string[];
   description: string;
   phrases: string;
   path: string;
@@ -166,12 +209,13 @@ function fieldText(part: ToolPart): {
 } {
   const title = normalize(`${part.dashboardTitle ?? ''} ${part.name}`);
   const partName = normalize(part.part);
+  const aliasList = part.aliases;
   const aliases = normalize(part.aliases.join(' '));
   const description = normalize(part.description);
   const phrases = normalize(part.phrases.join(' '));
   const path = normalize(`${part.path ?? ''} ${part.openHint ?? ''} ${part.partKey ?? ''}`);
   const words = tokenize(`${title} ${partName} ${aliases} ${description} ${phrases} ${path}`);
-  return { title, part: partName, aliases, description, phrases, path, words };
+  return { title, part: partName, aliases, aliasList, description, phrases, path, words };
 }
 
 function phraseOverlap(queryTokens: string[], phrase: string): number {
@@ -203,23 +247,62 @@ function hasDrawOnPlansIntent(expanded: Set<string>): boolean {
   return draw && plans && efs;
 }
 
-function hasCalculatorIntent(expanded: Set<string>): boolean {
-  return hasAny(expanded, ['bre', 'bre135', 'calculator', 'assessment', 'numbers']);
+/** Calculator-numbers intent from the typed query, not from br→bre synonym expansion. */
+function hasCalculatorIntent(queryTokens: string[]): boolean {
+  const tokens = new Set(queryTokens);
+  if (hasAny(tokens, ['calculator', 'assessment', 'numbers'])) return true;
+  if (tokens.has('bre135')) return true;
+  if (tokens.has('bre') && tokens.has('135')) return true;
+  if (tokens.has('br') && tokens.has('187')) return true;
+  return false;
+}
+
+function queryWantsLegacy(query: string, expanded: Set<string>): boolean {
+  if (/\.(py|xlsm|xlsx|xls|exe)\b/i.test(query)) return true;
+  return hasAny(expanded, LEGACY_QUERY_TOKENS);
+}
+
+function legacyHasDistinctiveHit(part: ToolPart, expanded: Set<string>): boolean {
+  const parentWords = new Set(tokenize(part.parentTool));
+  const distinctive = tokenize(`${part.aliases.join(' ')} ${part.part}`);
+  for (const token of expanded) {
+    if (token.length < 2) continue;
+    if (parentWords.has(token)) continue;
+    if (distinctive.some((word) => word === token || word.startsWith(token))) return true;
+  }
+  return false;
+}
+
+function textHasPrefix(field: string, query: string): boolean {
+  const q = normalize(query);
+  if (q.length < 2) return false;
+  const words = tokenize(field);
+  if (words.some((word) => word === q || word.startsWith(q))) return true;
+  const compactField = compactAlnum(field);
+  const compactQuery = compactAlnum(query);
+  return compactQuery.length >= 2 && (compactField === compactQuery || compactField.startsWith(compactQuery));
+}
+
+function aliasesHavePrefix(aliases: string[], query: string): boolean {
+  return aliases.some((alias) => textHasPrefix(alias, query));
 }
 
 function scorePart(query: string, queryTokens: string[], expanded: Set<string>, part: ToolPart): number {
   if (part.shelved) return 0;
+  if (part.legacy && !queryWantsLegacy(query, expanded) && !legacyHasDistinctiveHit(part, expanded)) {
+    return 0;
+  }
 
   const fields = fieldText(part);
   const normalisedQuery = normalize(query);
   let score = 0;
 
-  if (normalisedQuery.length >= 2 && fields.title.includes(normalisedQuery)) score += 22;
-  if (normalisedQuery.length >= 2 && fields.part.includes(normalisedQuery)) score += 20;
-  if (normalisedQuery.length >= 2 && fields.aliases.includes(normalisedQuery)) score += 18;
-  if (normalisedQuery.length >= 4 && fields.description.includes(normalisedQuery)) score += 12;
-  if (normalisedQuery.length >= 4 && fields.phrases.includes(normalisedQuery)) score += 28;
-  if (normalisedQuery.length >= 5 && fields.path.includes(normalisedQuery)) score += 16;
+  if (textHasPrefix(fields.title, normalisedQuery)) score += 22;
+  if (textHasPrefix(fields.part, normalisedQuery)) score += 20;
+  if (aliasesHavePrefix(fields.aliasList, normalisedQuery)) score += 18;
+  if (normalisedQuery.length >= 4 && textHasPrefix(fields.description, normalisedQuery)) score += 12;
+  if (normalisedQuery.length >= 4 && textHasPrefix(fields.phrases, normalisedQuery)) score += 28;
+  if (normalisedQuery.length >= 5 && textHasPrefix(fields.path, normalisedQuery)) score += 16;
 
   for (const token of expanded) {
     if (token.length < 2) continue;
@@ -229,9 +312,11 @@ function scorePart(query: string, queryTokens: string[], expanded: Set<string>, 
     else if (fields.phrases.split(' ').includes(token)) score += 6;
     else if (fields.description.split(' ').includes(token)) score += 3;
     else if (fields.path.split(' ').includes(token)) score += 4;
-    else if (fields.words.some((word) => word.startsWith(token))) score += 5;
+    else if (token.length >= 3 && fields.words.some((word) => word.startsWith(token))) score += 5;
     else if (token.includes(' ') && `${fields.title} ${fields.aliases} ${fields.phrases}`.includes(token)) {
       score += 10;
+    } else if (fields.aliasList.some((alias) => compactAlnum(alias).startsWith(compactAlnum(token)))) {
+      score += 6;
     }
   }
 
@@ -252,8 +337,12 @@ function scorePart(query: string, queryTokens: string[], expanded: Set<string>, 
   if (part.id === 'warehouse-smoke' && hasDrawOnPlansIntent(expanded)) {
     score -= 40;
   }
-  if (part.id === 'upload-canvas-efs' && hasCalculatorIntent(expanded) && !hasDrawOnPlansIntent(expanded)) {
+  if (part.id === 'upload-canvas-efs' && hasCalculatorIntent(queryTokens) && !hasDrawOnPlansIntent(expanded)) {
     score -= 35;
+  }
+
+  if (score > 0 && part.kind === 'web' && !queryWantsLegacy(query, expanded)) {
+    score += 8;
   }
 
   return score;
@@ -275,9 +364,8 @@ function collapseParents(ranked: Ranked[]): Ranked[] {
 
 function whyFor(part: ToolPart): string {
   if (part.partKey === 'efs') {
-    return 'Draw on warehouse or elevation plans in Upload Canvas External Fire Spread mode.';
+    return 'On the Upload Canvas dev app, choose Mode → External Fire Spread. Production does not have this mode yet.';
   }
-  if (part.openHint) return part.openHint;
   return part.description;
 }
 
@@ -327,7 +415,11 @@ export function searchTools(query: string, tools: ToolPart[] = ALL_TOOLS): ToolS
   const ranked = visible
     .map((part) => ({ part, score: scorePart(trimmed, queryTokens, expanded, part) }))
     .filter((row) => row.score > 0)
-    .sort((a, b) => b.score - a.score || a.part.name.localeCompare(b.part.name));
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const webRank = (part: ToolPart) => (part.kind === 'web' ? 0 : 1);
+      return webRank(a.part) - webRank(b.part) || a.part.name.localeCompare(b.part.name);
+    });
 
   const collapsed = collapseParents(ranked);
   const confidence = confidenceFor(collapsed, mode);

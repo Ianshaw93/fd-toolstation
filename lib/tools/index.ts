@@ -2,6 +2,7 @@ export type { ToolKind, ToolPart, ToolSearchResult, ToolSuggestion } from './typ
 export {
   ALL_TOOLS,
   CATALOGUE,
+  UPLOAD_CANVAS_DEV_ORIGIN,
   UPLOAD_CANVAS_MODES,
   UPLOAD_CANVAS_ORIGIN,
   ctaLabel,

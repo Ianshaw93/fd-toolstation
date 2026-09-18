@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ToolBrowser from '../../components/home/ToolBrowser';
-import { UPLOAD_CANVAS_ORIGIN } from '../../lib/tools/catalogue';
+import { UPLOAD_CANVAS_DEV_ORIGIN } from '../../lib/tools/catalogue';
 
 const push = jest.fn();
 const open = jest.fn();
@@ -71,9 +71,18 @@ describe('ToolBrowser search', () => {
     expect(screen.getByRole('button', { name: 'Open in External Fire Spread mode' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Open in External Fire Spread mode' }));
     expect(open).toHaveBeenCalledWith(
-      `${UPLOAD_CANVAS_ORIGIN}/?mode=efs`,
+      `${UPLOAD_CANVAS_DEV_ORIGIN}/?mode=efs`,
       '_blank',
       'noopener,noreferrer',
     );
+  });
+
+  it('shows more than three palette rows for query "br"', async () => {
+    const user = userEvent.setup();
+    render(<ToolBrowser />);
+    await user.type(screen.getByPlaceholderText('Search tools...'), 'br');
+    expect(screen.getAllByRole('option').length).toBeGreaterThan(3);
+    expect(document.querySelector('[data-tool-id="efs-calculator"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-tool-id="upload-canvas-efs"]')).toBeInTheDocument();
   });
 });

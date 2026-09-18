@@ -2,6 +2,10 @@ import type { ToolKind, ToolPart, UploadCanvasMode } from './types';
 
 export const UPLOAD_CANVAS_ORIGIN = 'https://upload-canvas.vercel.app';
 
+/** EFS mode exists on the Upload Canvas `dev` deployment, not production main. */
+export const UPLOAD_CANVAS_DEV_ORIGIN =
+  'https://upload-canvas-git-dev-fire-dynamics-projects.vercel.app';
+
 export const UPLOAD_CANVAS_MODES: UploadCanvasMode[] = [
   'fdsGen',
   'radiation',
@@ -10,7 +14,8 @@ export const UPLOAD_CANVAS_MODES: UploadCanvasMode[] = [
 ];
 
 export function uploadCanvasModeUrl(mode: UploadCanvasMode): string {
-  return `${UPLOAD_CANVAS_ORIGIN}/?mode=${mode}`;
+  const origin = mode === 'efs' ? UPLOAD_CANVAS_DEV_ORIGIN : UPLOAD_CANVAS_ORIGIN;
+  return `${origin}/?mode=${mode}`;
 }
 
 const canvasModes: Array<{
@@ -24,22 +29,62 @@ const canvasModes: Array<{
     partKey: 'fdsGen',
     part: 'FDS Generation',
     description: 'Draw geometry on a plan and generate FDS input (meshes, obstructions, vents).',
-    aliases: ['fds', 'fds gen', 'fdsgen', 'fds generation', 'pyrosim', 'mesh', 'obstruction'],
+    aliases: [
+      'fds',
+      'fds gen',
+      'fdsgen',
+      'fds generation',
+      'pyrosim',
+      'mesh',
+      'obstruction',
+      'nist fds',
+      'fds user guide',
+      'mesh alignment',
+      'fds-smv',
+    ],
     phrases: ['generate fds', 'fds from a plan', 'draw meshes on a plan'],
   },
   {
     partKey: 'radiation',
     part: 'Radiation',
-    description: 'Draw on a plan to set up a radiation / heat-flux assessment.',
-    aliases: ['radiation', 'heat flux', 'view factor radiation'],
-    phrases: ['radiation on a plan', 'heat flux drawing'],
+    description: 'BR 187 boundary distance / view-factor radiation calculator on a plan.',
+    aliases: [
+      'radiation',
+      'heat flux',
+      'view factor',
+      'view factor radiation',
+      'boundary distance',
+      'br 187',
+      'br187',
+      'br-187',
+    ],
+    phrases: ['radiation on a plan', 'heat flux drawing', 'br 187 view factor'],
   },
   {
     partKey: 'timeEq',
     part: 'Time Equivalence',
-    description: 'Draw on a plan for time-equivalence inputs.',
-    aliases: ['time eq', 'time equivalence', 'timeeq', 'time-equivalence'],
-    phrases: ['time equivalence canvas', 'time eq on a plan'],
+    description:
+      'Draw on a plan for time-equivalence / reliability inputs (EC1 Annex A, PD 6688, ISO parametric fire).',
+    aliases: [
+      'time eq',
+      'time equivalence',
+      'timeeq',
+      'time-equivalence',
+      'en 1991',
+      'en1991',
+      'eurocode',
+      'eurocode 1',
+      'ec1',
+      'ec1 annex a',
+      'pd 6688',
+      '6688',
+      'quintiere',
+      'iso 834',
+      'iso fire',
+      'parametric fire',
+      'time equivalence reliability',
+    ],
+    phrases: ['time equivalence canvas', 'time eq on a plan', 'eurocode time equivalence'],
   },
   {
     partKey: 'efs',
@@ -52,6 +97,13 @@ const canvasModes: Array<{
       'draw on plans',
       'markup efs',
       'elevation plans',
+      'bre',
+      'bre 135',
+      'bre135',
+      'bre-135',
+      'br 187',
+      'br187',
+      'br-187',
     ],
     phrases: [
       'external fire spread tool where I draw on warehouse plans',
@@ -75,7 +127,10 @@ const uploadCanvasParts: ToolPart[] = canvasModes.map((mode) => ({
   phrases: mode.phrases,
   deepLink: uploadCanvasModeUrl(mode.partKey),
   url: uploadCanvasModeUrl(mode.partKey),
-  openHint: `Opens Upload Canvas in ${mode.part} mode (?mode=${mode.partKey}).`,
+  openHint:
+    mode.partKey === 'efs'
+      ? 'On the Upload Canvas dev app, choose Mode → External Fire Spread. Production does not have this mode yet.'
+      : `Opens Upload Canvas in ${mode.part} mode (?mode=${mode.partKey}).`,
   icon: '📝',
 }));
 
@@ -219,6 +274,9 @@ export const CATALOGUE: ToolPart[] = [
       'bre135',
       'bre-135',
       'br 187',
+      'br187',
+      'br-187',
+      'bre',
       'efs',
       'external fire spread',
       'elevation assessment',
@@ -245,8 +303,26 @@ export const CATALOGUE: ToolPart[] = [
     parentId: 'warehouse-smoke',
     kind: 'web',
     description: 'Smoke layer descent and ASET/RSET assessment for a base warehouse',
-    aliases: ['warehouse smoke', 'aset', 'rset', 'smoke layer', 'tenability', 'shed smoke'],
-    phrases: ['warehouse smoke', 'aset rset', 'smoke layer descent'],
+    aliases: [
+      'warehouse smoke',
+      'aset',
+      'rset',
+      'smoke layer',
+      'tenability',
+      'shed smoke',
+      'bs 7974',
+      'pd 7974',
+      '7974',
+      '7974-1',
+      '7974-6',
+      'pd 7974-1',
+      'bs 7974-6',
+      'pd 7974-6',
+      'cibse',
+      'cibse guide e',
+      'drysdale',
+    ],
+    phrases: ['warehouse smoke', 'aset rset', 'smoke layer descent', 'bs 7974', 'cibse guide e'],
     url: '/warehouse-smoke',
     deepLink: '/warehouse-smoke',
     icon: '🏭',
@@ -268,12 +344,15 @@ export const CATALOGUE: ToolPart[] = [
       'xlsm',
       'vba shed',
       'br 187 excel',
+      'br187',
+      'bre 135',
     ],
     phrases: ['excel efs', 'shed fire strategy workbook'],
     path: 'Fire Dynamics Group Dropbox/07 Technical Tools/4. Clever Ideas - External/VBA Shed Fire Strategy/version 5/input_sheet_and_tables_v6.xlsm',
     openHint:
       'Open from Dropbox: 07 Technical Tools / 4. Clever Ideas - External / VBA Shed Fire Strategy / version 5 / input_sheet_and_tables_v6.xlsm. Use the External Spread tab.',
     icon: '📗',
+    legacy: true,
   },
   {
     id: 'efs-desktop-gui',
@@ -285,12 +364,13 @@ export const CATALOGUE: ToolPart[] = [
     kind: 'desktop',
     description:
       'Original tkinter EFS app. Tab 6 is External Fire Spread (BRE 135) — documented in app/external-firespread/REFERENCE.md.',
-    aliases: ['main_efs_gui', 'efs gui', 'tkinter efs'],
+    aliases: ['main_efs_gui', 'efs gui', 'tkinter efs', 'bre 135', 'bre135', 'br 187'],
     phrases: ['desktop efs gui', 'python efs gui'],
     path: 'C:\\Users\\IanShaw\\localProgramming\\fd\\external_firespread',
     openHint:
       'Run main_efs_gui.py in localProgramming/fd/external_firespread. Tab 6 is External Fire Spread (BRE 135).',
     icon: '🖥️',
+    legacy: true,
   },
   {
     id: 'warehouse-smoke-python',
@@ -308,6 +388,7 @@ export const CATALOGUE: ToolPart[] = [
     openHint:
       'Open Dropbox: 07 Technical Tools / 1. Internal / Base Warehouse Smoke Depth / warehouse_smoke_layer.py (Whole_Layer_Assumption is the model shipped in the web tool).',
     icon: '🐍',
+    legacy: true,
   },
 ];
 
@@ -326,6 +407,9 @@ export function dashboardCards(tools: ToolPart[] = ALL_TOOLS): ToolPart[] {
 }
 
 export function partLabel(tool: ToolPart): string {
+  if (tool.partKey === 'efs') {
+    return 'Upload Canvas → External Fire Spread (dev)';
+  }
   if (tool.partKey) {
     return `${tool.parentTool} → ${tool.part}`;
   }

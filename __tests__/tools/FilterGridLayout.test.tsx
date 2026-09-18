@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import FilterGridLayout from '../../components/home/search-layouts/FilterGridLayout';
 import { searchTools } from '../../lib/tools/search';
-import { UPLOAD_CANVAS_ORIGIN } from '../../lib/tools/catalogue';
+import { UPLOAD_CANVAS_DEV_ORIGIN } from '../../lib/tools/catalogue';
 
 describe('FilterGridLayout', () => {
   it('renders matcher output: part name, why, and efs mode deep-link CTA', () => {
@@ -18,7 +18,7 @@ describe('FilterGridLayout', () => {
     expect(onOpen).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'upload-canvas-efs',
-        deepLink: `${UPLOAD_CANVAS_ORIGIN}/?mode=efs`,
+        deepLink: `${UPLOAD_CANVAS_DEV_ORIGIN}/?mode=efs`,
       }),
     );
   });

@@ -33,6 +33,8 @@ export interface ToolPart {
   hasLaunchButton?: boolean;
   hasInstructions?: boolean;
   wip?: boolean;
+  /** Original Excel/desktop/python superseded by a shipped web tool. Hidden unless the query asks for it. */
+  legacy?: boolean;
 }
 
 export type SearchMode = 'browse' | 'keyword' | 'intent';
