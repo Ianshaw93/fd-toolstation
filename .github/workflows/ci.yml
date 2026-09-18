@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    name: test + typecheck + next build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Unit tests (Jest)
+        run: npm test
+      - name: Typecheck (tsc — Jest does not do this)
+        run: npm run typecheck
+      - name: Production build (same as Vercel)
+        run: npm run build
