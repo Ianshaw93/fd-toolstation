@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "jest",
+    "typecheck": "tsc --noEmit",
+    "ci": "npm test && npm run typecheck && npm run build"
   },
   "dependencies": {
     "next": "16.0.7",
