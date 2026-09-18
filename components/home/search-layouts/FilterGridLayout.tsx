@@ -4,8 +4,7 @@ import ToolCard from '../ToolCard';
 import type { ToolSearchLayoutProps } from './types';
 
 /**
- * Current default: suggestion panel + wrapping card grid.
- * Temporary until Ian picks a prototype — do not treat this as the locked homepage.
+ * Suggestion panel + wrapping card grid. Kept as a prototype; command palette is active.
  */
 export default function FilterGridLayout({ result, onOpen, cfdStatus = null }: ToolSearchLayoutProps) {
   const suggestionUrl = result.suggestion ? resolveOpenUrl(result.suggestion.part) : undefined;

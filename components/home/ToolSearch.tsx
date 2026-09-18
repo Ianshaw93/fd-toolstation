@@ -24,23 +24,24 @@ export default function ToolSearch({
   const [query, setQuery] = useState('');
   const result = searchTools(query, ALL_TOOLS);
 
-  if (result.mode === 'browse') {
-    return (
-      <>
-        <ToolSearchInput query={query} onQueryChange={setQuery} />
-        {children}
-      </>
-    );
-  }
+  const browsing = result.mode === 'browse';
 
   return (
     <>
-      <ToolSearchInput query={query} onQueryChange={setQuery} />
-      <ActiveSearchLayout
-        result={result}
-        cfdStatus={cfdStatus}
-        onOpen={(part) => navigateToTool(part, router)}
+      <ToolSearchInput
+        query={query}
+        onQueryChange={setQuery}
+        focusAccent={browsing ? 'gray' : 'blue'}
       />
+      {browsing ? (
+        children
+      ) : (
+        <ActiveSearchLayout
+          result={result}
+          cfdStatus={cfdStatus}
+          onOpen={(part) => navigateToTool(part, router)}
+        />
+      )}
     </>
   );
 }
