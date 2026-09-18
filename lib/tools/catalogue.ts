@@ -2,10 +2,6 @@ import type { ToolKind, ToolPart, UploadCanvasMode } from './types';
 
 export const UPLOAD_CANVAS_ORIGIN = 'https://upload-canvas.vercel.app';
 
-/** EFS mode exists on the Upload Canvas `dev` deployment, not production main. */
-export const UPLOAD_CANVAS_DEV_ORIGIN =
-  'https://upload-canvas-git-dev-fire-dynamics-projects.vercel.app';
-
 export const UPLOAD_CANVAS_MODES: UploadCanvasMode[] = [
   'fdsGen',
   'radiation',
@@ -14,8 +10,7 @@ export const UPLOAD_CANVAS_MODES: UploadCanvasMode[] = [
 ];
 
 export function uploadCanvasModeUrl(mode: UploadCanvasMode): string {
-  const origin = mode === 'efs' ? UPLOAD_CANVAS_DEV_ORIGIN : UPLOAD_CANVAS_ORIGIN;
-  return `${origin}/?mode=${mode}`;
+  return `${UPLOAD_CANVAS_ORIGIN}/?mode=${mode}`;
 }
 
 const canvasModes: Array<{
@@ -133,10 +128,7 @@ const uploadCanvasParts: ToolPart[] = canvasModes.map((mode) => ({
   calcSourceIds: mode.calcSourceIds,
   deepLink: uploadCanvasModeUrl(mode.partKey),
   url: uploadCanvasModeUrl(mode.partKey),
-  openHint:
-    mode.partKey === 'efs'
-      ? 'On the Upload Canvas dev app, choose Mode → External Fire Spread. Production does not have this mode yet.'
-      : `Opens Upload Canvas in ${mode.part} mode (?mode=${mode.partKey}).`,
+  openHint: `Opens Upload Canvas in ${mode.part} mode (?mode=${mode.partKey}).`,
   icon: '📝',
 }));
 
@@ -417,9 +409,6 @@ export function dashboardCards(tools: ToolPart[] = ALL_TOOLS): ToolPart[] {
 }
 
 export function partLabel(tool: ToolPart): string {
-  if (tool.partKey === 'efs') {
-    return 'Upload Canvas → External Fire Spread (dev)';
-  }
   if (tool.partKey) {
     return `${tool.parentTool} → ${tool.part}`;
   }

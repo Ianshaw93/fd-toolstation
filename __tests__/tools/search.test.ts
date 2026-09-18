@@ -3,12 +3,20 @@ import { join } from 'path';
 import { filterTools, navigateToTool, searchTools } from '../../lib/tools/search';
 import {
   CATALOGUE,
-  UPLOAD_CANVAS_DEV_ORIGIN,
+  UPLOAD_CANVAS_MODES,
+  UPLOAD_CANVAS_ORIGIN,
   ctaLabel,
   partLabel,
   uploadCanvasModeUrl,
 } from '../../lib/tools/catalogue';
 import type { ToolPart } from '../../lib/tools/types';
+
+const UPLOAD_CANVAS_GIT_DEV_HOST = 'upload-canvas-git-dev-fire-dynamics-projects.vercel.app';
+const TOOL_UX_SOURCE_FILES = [
+  join(__dirname, '../../lib/tools/catalogue.ts'),
+  join(__dirname, '../../lib/tools/search.ts'),
+  join(__dirname, '../../lib/tools/index.ts'),
+];
 
 const sample: ToolPart[] = [
   {
@@ -55,6 +63,28 @@ const sample: ToolPart[] = [
     url: '/cfd-dashboard',
   },
 ];
+
+describe('uploadCanvasModeUrl — production main', () => {
+  it('deep-links every Upload Canvas mode (including efs) to production, not git-dev', () => {
+    expect(UPLOAD_CANVAS_MODES).toEqual(['fdsGen', 'radiation', 'timeEq', 'efs']);
+    for (const mode of UPLOAD_CANVAS_MODES) {
+      expect(uploadCanvasModeUrl(mode)).toBe(`${UPLOAD_CANVAS_ORIGIN}/?mode=${mode}`);
+      expect(uploadCanvasModeUrl(mode)).not.toContain(UPLOAD_CANVAS_GIT_DEV_HOST);
+    }
+    expect(uploadCanvasModeUrl('efs')).toBe('https://upload-canvas.vercel.app/?mode=efs');
+  });
+
+  it('keeps the git-dev Vercel host out of catalogue/search UX sources', () => {
+    for (const file of TOOL_UX_SOURCE_FILES) {
+      const src = readFileSync(file, 'utf8');
+      expect(src).not.toContain('upload-canvas-git-dev');
+      expect(src).not.toContain('UPLOAD_CANVAS_DEV');
+      expect(src).not.toContain('fire-dynamics-projects');
+      expect(src).not.toMatch(/dev app/i);
+      expect(src).not.toMatch(/production does not have this mode/i);
+    }
+  });
+});
 
 describe('filterTools', () => {
   it('returns all non-shelved dashboard tools for an empty query', () => {
@@ -148,14 +178,16 @@ describe('searchTools — real catalogue', () => {
     expect(result.matches.some((t) => t.id === 'warehouse-smoke-python')).toBe(true);
   });
 
-  it('efs uses the upload-canvas dev host, not production', () => {
+  it('efs uses the upload-canvas production host, not git-dev', () => {
     const result = searchTools('external fire spread tool where I draw on warehouse plans');
     const link = result.suggestion?.part.deepLink ?? '';
-    expect(link).toContain('upload-canvas-git-dev');
+    expect(link).toBe(`${UPLOAD_CANVAS_ORIGIN}/?mode=efs`);
     expect(link).toContain('mode=efs');
-    expect(link).not.toContain('https://upload-canvas.vercel.app');
-    expect(result.suggestion?.label).toMatch(/External Fire Spread/i);
+    expect(link).not.toContain('upload-canvas-git-dev');
+    expect(result.suggestion?.label).toBe('Upload Canvas → External Fire Spread');
     expect(result.suggestion?.why).toMatch(/mode/i);
+    expect(result.suggestion?.why).not.toMatch(/dev app/i);
+    expect(result.suggestion?.why).not.toMatch(/production does not have this mode/i);
     expect(result.suggestion?.why).not.toMatch(/dropbox/i);
   });
 
@@ -165,7 +197,7 @@ describe('searchTools — real catalogue', () => {
     expect(result.suggestion?.part.id).toBe('upload-canvas-efs');
     expect(result.suggestion?.label).toMatch(/Upload Canvas/i);
     expect(result.suggestion?.label).toMatch(/External Fire Spread/i);
-    expect(result.suggestion?.part.deepLink).toBe(`${UPLOAD_CANVAS_DEV_ORIGIN}/?mode=efs`);
+    expect(result.suggestion?.part.deepLink).toBe(`${UPLOAD_CANVAS_ORIGIN}/?mode=efs`);
     expect(result.suggestion?.part.deepLink).toContain('mode=efs');
     expect(result.matches[0].id).toBe('upload-canvas-efs');
   });
@@ -246,7 +278,7 @@ describe('searchTools — real catalogue', () => {
 
   it('CTA copy names the Upload Canvas part, not the shell', () => {
     const efs = CATALOGUE.find((t) => t.id === 'upload-canvas-efs') as ToolPart;
-    expect(partLabel(efs)).toBe('Upload Canvas → External Fire Spread (dev)');
+    expect(partLabel(efs)).toBe('Upload Canvas → External Fire Spread');
     expect(ctaLabel(efs)).toBe('Open in External Fire Spread mode');
   });
 
@@ -255,8 +287,8 @@ describe('searchTools — real catalogue', () => {
     expect(result.matches.length).toBeGreaterThan(3);
     expect(result.matches.some((t) => t.id === 'efs-calculator')).toBe(true);
     expect(result.matches.some((t) => t.id === 'upload-canvas-efs')).toBe(true);
-    expect(result.matches.find((t) => t.id === 'upload-canvas-efs')?.deepLink).toContain(
-      'upload-canvas-git-dev',
+    expect(result.matches.find((t) => t.id === 'upload-canvas-efs')?.deepLink).toBe(
+      `${UPLOAD_CANVAS_ORIGIN}/?mode=efs`,
     );
   });
 
@@ -325,7 +357,7 @@ describe('navigateToTool', () => {
     navigateToTool(efs, { push });
     expect(push).not.toHaveBeenCalled();
     expect(open).toHaveBeenCalledWith(
-      `${UPLOAD_CANVAS_DEV_ORIGIN}/?mode=efs`,
+      `${UPLOAD_CANVAS_ORIGIN}/?mode=efs`,
       '_blank',
       'noopener,noreferrer',
     );

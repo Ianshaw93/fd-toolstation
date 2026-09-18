@@ -391,9 +391,6 @@ function collapseParents(ranked: Ranked[]): Ranked[] {
 }
 
 function whyFor(part: ToolPart): string {
-  if (part.partKey === 'efs') {
-    return 'On the Upload Canvas dev app, choose Mode → External Fire Spread. Production does not have this mode yet.';
-  }
   return part.description;
 }
 

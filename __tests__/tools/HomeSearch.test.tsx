@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ToolBrowser from '../../components/home/ToolBrowser';
-import { UPLOAD_CANVAS_DEV_ORIGIN } from '../../lib/tools/catalogue';
+import { UPLOAD_CANVAS_ORIGIN } from '../../lib/tools/catalogue';
 import { logToolSearchClick } from '../../lib/tools/analytics';
 
 const push = jest.fn();
@@ -78,7 +78,7 @@ describe('ToolBrowser search', () => {
     expect(screen.getByRole('button', { name: 'Open in External Fire Spread mode' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Open in External Fire Spread mode' }));
     expect(open).toHaveBeenCalledWith(
-      `${UPLOAD_CANVAS_DEV_ORIGIN}/?mode=efs`,
+      `${UPLOAD_CANVAS_ORIGIN}/?mode=efs`,
       '_blank',
       'noopener,noreferrer',
     );

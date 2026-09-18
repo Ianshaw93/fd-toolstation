@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CommandPaletteLayout, { paletteItems } from '../../components/home/search-layouts/CommandPaletteLayout';
 import { searchTools } from '../../lib/tools/search';
-import { UPLOAD_CANVAS_DEV_ORIGIN } from '../../lib/tools/catalogue';
+import { UPLOAD_CANVAS_ORIGIN } from '../../lib/tools/catalogue';
 
 describe('paletteItems', () => {
   it('puts the suggested part first without duplicating it', () => {
@@ -28,7 +28,7 @@ describe('CommandPaletteLayout', () => {
     expect(onOpen).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'upload-canvas-efs',
-        deepLink: `${UPLOAD_CANVAS_DEV_ORIGIN}/?mode=efs`,
+        deepLink: `${UPLOAD_CANVAS_ORIGIN}/?mode=efs`,
       }),
     );
   });
