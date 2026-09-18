@@ -27,9 +27,11 @@ const canvasModes: Array<{
     description: 'Draw geometry on a plan and generate FDS input (meshes, obstructions, vents).',
     aliases: [
       'fds',
+      'cfd',
       'fds gen',
       'fdsgen',
       'fds generation',
+      'cfd gen',
       'pyrosim',
       'mesh',
       'obstruction',

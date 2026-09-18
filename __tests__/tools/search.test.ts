@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { filterTools, navigateToTool, searchTools } from '../../lib/tools/search';
+import { filterTools, navigateToTool, searchTools, expandTokens } from '../../lib/tools/search';
 import {
   CATALOGUE,
   UPLOAD_CANVAS_MODES,
@@ -147,10 +147,25 @@ describe('searchTools — real catalogue', () => {
     expect(result.matches.some((t) => t.id === 'cfd-dashboard')).toBe(true);
   });
 
-  it('short query "cfd" includes the unshelved CFD Dashboard', () => {
+  it('short query "cfd" includes the CFD family: dashboard, post-processing, and FDS gen', () => {
     const result = searchTools('cfd');
-    expect(result.matches.some((t) => t.id === 'cfd-dashboard')).toBe(true);
+    const ids = result.matches.map((t) => t.id);
+    expect(ids).toEqual(
+      expect.arrayContaining(['cfd-dashboard', 'cfd-post-processing', 'upload-canvas-fdsGen']),
+    );
     expect(result.matches.find((t) => t.id === 'cfd-dashboard')?.shelved).toBeFalsy();
+  });
+
+  it('short query "fds" includes the same CFD/FDS family the other way round', () => {
+    const result = searchTools('fds');
+    expect(result.matches.map((t) => t.id)).toEqual(
+      expect.arrayContaining(['upload-canvas-fdsGen', 'cfd-dashboard', 'cfd-post-processing']),
+    );
+  });
+
+  it('treats cfd and fds as bidirectional synonyms', () => {
+    expect(expandTokens(['cfd']).has('fds')).toBe(true);
+    expect(expandTokens(['fds']).has('cfd')).toBe(true);
   });
 
   it('queries macs / macs+ / i-macs hit the MACS+ catalogue entry', () => {

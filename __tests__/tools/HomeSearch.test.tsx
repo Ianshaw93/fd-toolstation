@@ -113,6 +113,13 @@ describe('ToolBrowser search', () => {
 
     await typeQuery('cfd');
     expect(document.querySelector('[data-tool-id="cfd-dashboard"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-tool-id="cfd-post-processing"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-tool-id="upload-canvas-fdsGen"]')).toBeInTheDocument();
+
+    await typeQuery('fds');
+    expect(document.querySelector('[data-tool-id="upload-canvas-fdsGen"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-tool-id="cfd-dashboard"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-tool-id="cfd-post-processing"]')).toBeInTheDocument();
 
     await typeQuery('macs');
     expect(document.querySelector('[data-tool-id="i-macs"]')).toBeInTheDocument();
