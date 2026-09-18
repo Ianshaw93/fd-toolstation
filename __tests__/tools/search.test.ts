@@ -48,19 +48,19 @@ const sample: ToolPart[] = [
     url: '/warehouse-smoke',
   },
   {
-    id: 'cfd-dashboard',
-    name: 'CFD Dashboard',
-    part: 'Live FDS status',
-    parentTool: 'CFD Dashboard',
-    parentId: 'cfd-dashboard',
+    id: 'secret-lab',
+    name: 'Secret Lab',
+    part: 'Internal only',
+    parentTool: 'Secret Lab',
+    parentId: 'secret-lab',
     kind: 'web',
-    description: 'Live FDS simulation status',
-    aliases: ['cfd', 'fds'],
+    description: 'Intentionally hidden fixture for the shelved-exclusion test',
+    aliases: ['secret', 'hidden lab'],
     phrases: [],
     showOnDashboard: true,
     shelved: true,
-    icon: '🖥️',
-    url: '/cfd-dashboard',
+    icon: '🔒',
+    url: '/secret-lab',
   },
 ];
 
@@ -122,8 +122,8 @@ describe('filterTools', () => {
   });
 
   it('excludes shelved tools even when they would otherwise match', () => {
-    expect(filterTools('cfd', sample)).toEqual([]);
-    expect(filterTools('CFD Dashboard', sample)).toEqual([]);
+    expect(filterTools('secret', sample)).toEqual([]);
+    expect(filterTools('Secret Lab', sample)).toEqual([]);
   });
 });
 
@@ -135,6 +135,7 @@ describe('searchTools — real catalogue', () => {
     expect(result.matches.map((t) => t.dashboardTitle || t.name)).toEqual(
       expect.arrayContaining([
         'Search & Rescue Bot',
+        'CFD Dashboard',
         'Site Visit App Report Generator',
         'Sprinkler Grid Calculator',
         'PDF Markup Tools',
@@ -143,7 +144,40 @@ describe('searchTools — real catalogue', () => {
         'Warehouse Smoke Layer',
       ]),
     );
-    expect(result.matches.some((t) => t.id === 'cfd-dashboard')).toBe(false);
+    expect(result.matches.some((t) => t.id === 'cfd-dashboard')).toBe(true);
+  });
+
+  it('short query "cfd" includes the unshelved CFD Dashboard', () => {
+    const result = searchTools('cfd');
+    expect(result.matches.some((t) => t.id === 'cfd-dashboard')).toBe(true);
+    expect(result.matches.find((t) => t.id === 'cfd-dashboard')?.shelved).toBeFalsy();
+  });
+
+  it('queries macs / macs+ / i-macs hit the MACS+ catalogue entry', () => {
+    for (const query of ['macs', 'macs+', 'i-macs']) {
+      const result = searchTools(query);
+      expect(result.matches.some((t) => t.id === 'i-macs')).toBe(true);
+    }
+  });
+
+  it('post-processing phrases hit cfd-post-processing', () => {
+    for (const query of ['cfd post', 'post processing', 'cfdreportgen']) {
+      const result = searchTools(query);
+      expect(result.matches.some((t) => t.id === 'cfd-post-processing')).toBe(true);
+    }
+  });
+
+  it('GitHub desktop apps are first-class catalogue rows, not legacy or shelved', () => {
+    for (const id of ['i-macs', 'cfd-post-processing']) {
+      const tool = CATALOGUE.find((t) => t.id === id);
+      expect(tool).toBeDefined();
+      expect(tool?.kind).toBe('desktop');
+      expect(tool?.legacy).toBeFalsy();
+      expect(tool?.shelved).toBeFalsy();
+      expect(tool?.url).toMatch(/^https:\/\/github\.com\/Fire-Dynamics-Group\//);
+      expect(tool?.deepLink).toBe(tool?.url);
+      expect(tool?.openHint).toMatch(/Desktop app/i);
+    }
   });
 
   it('short query "sprinkler" surfaces the sprinkler grid and hides the rest', () => {

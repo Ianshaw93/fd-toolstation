@@ -67,6 +67,15 @@ const SYNONYM_GROUPS: string[][] = [
   ['fee proposal', 'fee', 'fees'],
   ['draw', 'drawing', 'drawn', 'annotate'],
   ['plan', 'plans'],
+  ['macs', 'macs+', 'macs plus', 'i-macs', 'imacs'],
+  [
+    'cfd post processing',
+    'cfdreportgen',
+    'cfd report gen',
+    'charts gen',
+    'fds figures',
+    'common corridor report',
+  ],
 ];
 
 const LEGACY_QUERY_TOKENS = [
