@@ -3,8 +3,10 @@
 Apply on **Fire-Dynamics-Group/backendForNextApp** (Railway Postgres). This
 toolstation repo cannot push that backend (`cursor[bot]` has no write access).
 
-Mirrors email-search `search_logs` + `search_clicks` so we can measure
-zero-result rate, top queries, and which parts engineers open.
+Endpoints the toolstation client calls (same `NEXT_PUBLIC_API_URL` as EFS/smoke):
+
+- `POST /tool-search/log`
+- `POST /tool-search/click`
 
 ## Files to copy
 

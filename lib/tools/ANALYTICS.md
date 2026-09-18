@@ -5,10 +5,10 @@
  * Goal: gauge whether homepage search works — zero-result rate, top queries,
  * click-through / open rate, which parts are chosen for NL queries.
  *
- * This frontend always records. Durable storage is Railway Postgres on
- * `backendForNextApp` once `patches/backend-tool-search-analytics` is applied
- * (this repo cannot push that backend). Until then POSTs 204 and the forward
- * may 404; search UX is unaffected.
+ * Durable storage is Misc Tools Postgres on `backendForNextApp`
+ * (`https://backendfornextapp-production.up.railway.app`). Toolstation posts
+ * with `NEXT_PUBLIC_API_URL` like EFS/smoke. Until that backend PR is live,
+ * POSTs 404 and are swallowed; search UX is unaffected.
  *
  * Identity: homepage Profile/Logout are decorative — no SSO. `user_id` /
  * `user_email` are nullable. Sessions use cookie `fd_tool_search_anon`.
@@ -47,6 +47,10 @@
  *   user_email         text null
  *   source             text
  *
- * Browser: POST /api/tool-search/log and /api/tool-search/click
- * Server:  forwards to Railway /tool-search/logs and /tool-search/clicks
+ * Browser (same NEXT_PUBLIC_API_URL pattern as EFS / smoke):
+ *   POST {API}/tool-search/log
+ *   POST {API}/tool-search/click
+ *
+ * Optional same-origin proxy: /api/tool-search/log and /api/tool-search/click
+ * still forward to those Railway paths (identity headers, if any).
  */

@@ -82,7 +82,10 @@ describe('tool-search analytics posting', () => {
     global.fetch = fetchMock as unknown as typeof fetch;
   });
 
-  it('POSTs a search log then a click that shares clientSearchId', () => {
+  it('POSTs to Railway /tool-search/log and /click (NEXT_PUBLIC_API_URL pattern)', () => {
+    expect(TOOL_SEARCH_LOG_PATH).toMatch(/\/tool-search\/log$/);
+    expect(TOOL_SEARCH_CLICK_PATH).toMatch(/\/tool-search\/click$/);
+    expect(TOOL_SEARCH_LOG_PATH).toContain('backendfornextapp');
     const result = searchTools('warehouse');
     const part = result.matches[0];
     logToolSearchClick(part, result, { latencyMs: 2 });

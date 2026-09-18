@@ -31,7 +31,7 @@ describe('analytics-forward', () => {
     expect(isClickEvent({ clientSearchId: 's1', query: 'br' })).toBe(false);
   });
 
-  it('forwards to Railway /tool-search/logs and never throws if the backend is down', async () => {
+  it('forwards to Railway /tool-search/log and never throws if the backend is down', async () => {
     const post = jest.fn(() => Promise.reject(new Error('ECONNREFUSED')));
     const result = await forwardToolSearchEvent(
       'log',

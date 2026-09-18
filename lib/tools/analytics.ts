@@ -4,19 +4,24 @@ import type { ToolPart, ToolSearchResult } from './types';
 /**
  * Tool-search analytics — same job as email-search `search_logs` + `search_clicks`.
  *
- * Homepage Profile/Logout are decorative (no SSO). userId / userEmail stay
- * null until Entra / Mail Marshal identity headers are wired. Until then we
- * key sessions with an anonymous cookie.
+ * Browser POSTs go to backendForNextApp (Misc Tools Postgres) using the same
+ * `NEXT_PUBLIC_API_URL` pattern as EFS / warehouse smoke:
+ *   POST {API}/tool-search/log
+ *   POST {API}/tool-search/click
+ * Failures (including 404 while that backend PR is still landing) are swallowed
+ * so ranking / open UX never waits on analytics.
  *
- * The browser POSTs to same-origin `/api/tool-search/{log,click}`. That route
- * forwards to Railway (`backendForNextApp` `/tool-search/logs|clicks`) once
- * `patches/backend-tool-search-analytics` is applied. Failures are swallowed
- * so search UX never waits on analytics.
+ * Homepage Profile/Logout are decorative (no SSO). userId / userEmail stay
+ * null until Entra is wired; sessions use cookie `fd_tool_search_anon`.
  */
 
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL || 'https://backendfornextapp-production.up.railway.app'
+).replace(/\/$/, '');
+
 export const TOOL_SEARCH_ANON_COOKIE = 'fd_tool_search_anon';
-export const TOOL_SEARCH_LOG_PATH = '/api/tool-search/log';
-export const TOOL_SEARCH_CLICK_PATH = '/api/tool-search/click';
+export const TOOL_SEARCH_LOG_PATH = `${API_URL}/tool-search/log`;
+export const TOOL_SEARCH_CLICK_PATH = `${API_URL}/tool-search/click`;
 export const TOOL_SEARCH_DEBOUNCE_MS = 400;
 const TOP_IDS_MAX = 20;
 

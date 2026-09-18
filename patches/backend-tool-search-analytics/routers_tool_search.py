@@ -11,7 +11,7 @@ from models.tool_search import ToolSearchClick, ToolSearchClickIn, ToolSearchLog
 router = APIRouter()
 
 
-@router.post("/logs", status_code=204)
+@router.post("/log", status_code=204)
 async def record_log(data: ToolSearchLogIn, db: AsyncSession = Depends(get_db)):
     db.add(
         ToolSearchLog(
@@ -34,7 +34,7 @@ async def record_log(data: ToolSearchLogIn, db: AsyncSession = Depends(get_db)):
     await db.commit()
 
 
-@router.post("/clicks", status_code=204)
+@router.post("/click", status_code=204)
 async def record_click(data: ToolSearchClickIn, db: AsyncSession = Depends(get_db)):
     db.add(
         ToolSearchClick(

@@ -19,15 +19,14 @@ export function identityFromHeaders(headers: Headers): Identity {
 }
 
 export function backendOrigin(): string {
-  return (
-    process.env.BACKEND_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    DEFAULT_BACKEND
-  ).replace(/\/$/, '');
+  return (process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || DEFAULT_BACKEND).replace(
+    /\/$/,
+    '',
+  );
 }
 
 export function backendPath(kind: 'log' | 'click'): string {
-  return kind === 'log' ? '/tool-search/logs' : '/tool-search/clicks';
+  return kind === 'log' ? '/tool-search/log' : '/tool-search/click';
 }
 
 export function enrichEvent(body: Record<string, unknown>, identity: Identity): Record<string, unknown> {
