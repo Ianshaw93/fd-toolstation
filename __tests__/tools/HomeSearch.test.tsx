@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ToolBrowser from '../../components/home/ToolBrowser';
 import { UPLOAD_CANVAS_DEV_ORIGIN } from '../../lib/tools/catalogue';
+import { logToolSearchClick } from '../../lib/tools/analytics';
 
 const push = jest.fn();
 const open = jest.fn();
@@ -12,6 +13,12 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('../../lib/cfd-api', () => ({
   fetchDashboardState: jest.fn(() => new Promise(() => {})),
+}));
+
+jest.mock('../../lib/tools/analytics', () => ({
+  TOOL_SEARCH_DEBOUNCE_MS: 400,
+  ensureSearchLogged: jest.fn(),
+  logToolSearchClick: jest.fn(),
 }));
 
 describe('ToolBrowser search', () => {
@@ -74,6 +81,11 @@ describe('ToolBrowser search', () => {
       `${UPLOAD_CANVAS_DEV_ORIGIN}/?mode=efs`,
       '_blank',
       'noopener,noreferrer',
+    );
+    expect(logToolSearchClick).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'upload-canvas-efs' }),
+      expect.anything(),
+      expect.anything(),
     );
   });
 

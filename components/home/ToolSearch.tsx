@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CfdDashboardState } from '../../lib/cfd-api';
+import { TOOL_SEARCH_DEBOUNCE_MS, ensureSearchLogged, logToolSearchClick } from '../../lib/tools/analytics';
 import { ALL_TOOLS } from '../../lib/tools/catalogue';
 import { navigateToTool, searchTools } from '../../lib/tools/search';
+import type { ToolPart } from '../../lib/tools/types';
 import { ActiveSearchLayout } from './search-layouts';
 import ToolSearchInput from './ToolSearchInput';
 
@@ -22,9 +24,31 @@ export default function ToolSearch({
 }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
+  const started = typeof performance !== 'undefined' ? performance.now() : 0;
   const result = searchTools(query, ALL_TOOLS);
+  const latencyMs = typeof performance !== 'undefined' ? Math.round(performance.now() - started) : null;
+  const latencyRef = useRef(latencyMs);
+  const resultRef = useRef(result);
+  latencyRef.current = latencyMs;
+  resultRef.current = result;
 
   const browsing = result.mode === 'browse';
+
+  useEffect(() => {
+    if (browsing) {
+      ensureSearchLogged(resultRef.current);
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      ensureSearchLogged(resultRef.current, { latencyMs: latencyRef.current });
+    }, TOOL_SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(handle);
+  }, [browsing, query]);
+
+  const onOpen = (part: ToolPart) => {
+    logToolSearchClick(part, result, { latencyMs: latencyRef.current });
+    navigateToTool(part, router);
+  };
 
   return (
     <>
@@ -36,11 +60,7 @@ export default function ToolSearch({
       {browsing ? (
         children
       ) : (
-        <ActiveSearchLayout
-          result={result}
-          cfdStatus={cfdStatus}
-          onOpen={(part) => navigateToTool(part, router)}
-        />
+        <ActiveSearchLayout result={result} cfdStatus={cfdStatus} onOpen={onOpen} />
       )}
     </>
   );

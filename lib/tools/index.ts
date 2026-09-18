@@ -18,3 +18,8 @@ export {
   resolveOpenUrl,
   searchTools,
 } from './search';
+export {
+  TOOL_SEARCH_DEBOUNCE_MS,
+  ensureSearchLogged,
+  logToolSearchClick,
+} from './analytics';
