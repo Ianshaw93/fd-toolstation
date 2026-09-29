@@ -29,6 +29,30 @@ export default function ManageProposalTextPage() {
     return result;
   }, [blocks]);
 
+  const orderedGroups = useMemo(() => {
+    const entries = [...grouped.entries()];
+    const structuralGroupNames = [
+      'Structural Fire Engineering',
+      'TMA Structural Fire Engineering',
+      'Time-Equivalency Structural Fire Engineering',
+      'FEM Structural Fire Engineering',
+    ];
+    const structuralNames = new Set(structuralGroupNames);
+    const structuralEntries = structuralGroupNames
+      .map((name) => entries.find(([group]) => group === name))
+      .filter((entry): entry is [string, TextBlock[]] => entry !== undefined);
+    const structuralIndex = entries.findIndex(([group]) => group === 'Structural Fire Engineering');
+
+    if (structuralIndex === -1) return entries;
+
+    const remainingEntries = entries.filter(([group]) => !structuralNames.has(group));
+    const insertIndex = entries
+      .slice(0, structuralIndex)
+      .filter(([group]) => !structuralNames.has(group)).length;
+    remainingEntries.splice(insertIndex, 0, ...structuralEntries);
+    return remainingEntries;
+  }, [grouped]);
+
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <div className="mx-auto max-w-4xl px-5 py-8 sm:px-8">
@@ -45,7 +69,7 @@ export default function ManageProposalTextPage() {
         {error && <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>}
         {loading && <p className="text-sm text-gray-500">Loading wording…</p>}
         {!loading && !error && blocks.length === 0 && <p className="text-sm text-gray-500">No wording blocks are available.</p>}
-        {[...grouped.entries()].map(([group, groupBlocks]) => <CollapsibleSection key={group} title={group} defaultOpen={false}>
+        {orderedGroups.map(([group, groupBlocks]) => <CollapsibleSection key={group} title={group === 'Introductions' ? 'General Introductions' : group} defaultOpen={false}>
           <div className="space-y-5">{groupBlocks.map((block) => <ManageTextBlockEditor key={block.key} block={block} editorName={name} />)}</div>
         </CollapsibleSection>)}
       </div>
