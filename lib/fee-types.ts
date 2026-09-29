@@ -54,6 +54,10 @@ export interface DesignStagesRiba1to4 {
   stage_4: ServiceConfig;
   common_corridor_cfd: ServiceConfig;
   open_plan_cfd: ServiceConfig;
+  tma_structural: ServiceConfig;
+  time_equivalency_structural: ServiceConfig;
+  fem_structural: ServiceConfig;
+  /** Retained for requests created before the Warehouse option was split. */
   warehouse_structural: ServiceConfig;
   warehouse_cfd: ServiceConfig;
   peer_review: ServiceConfig;
@@ -81,6 +85,25 @@ export interface FeeProposalRequest {
   design_stages_1_4: DesignStagesRiba1to4;
   design_stages_5: DesignStagesRiba5;
   design_stages_6: DesignStagesRiba6;
+}
+
+/** A shared wording block used by all future fee proposals. */
+export interface TextBlock {
+  key: string;
+  label: string;
+  kind: 'paragraph' | 'bullet_list' | 'template';
+  group_name: string;
+  sort_order: number;
+  content: string;
+  placeholders: string[];
+  updated_by?: string | null;
+}
+
+export interface TextBlockHistoryEntry {
+  id: number;
+  content: string;
+  edited_by: string;
+  created_at?: string | null;
 }
 
 export type ServiceKey1to4 = keyof DesignStagesRiba1to4;

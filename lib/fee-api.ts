@@ -1,10 +1,57 @@
+import type { Engineer, FeeProposalRequest, TextBlock, TextBlockHistoryEntry } from './fee-types';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backendfornextapp-production.up.railway.app';
 
-import type { Engineer, FeeProposalRequest } from './fee-types';
+async function asError(res: Response, fallback: string): Promise<Error> {
+  const body = await res.json().catch(() => ({ detail: fallback }));
+  return new Error(body.detail || fallback);
+}
 
 export async function fetchEngineers(): Promise<Engineer[]> {
   const res = await fetch(`${API_URL}/fee-proposals/engineers`);
   if (!res.ok) throw new Error('Failed to fetch engineers');
+  return res.json();
+}
+
+export async function fetchTextBlocks(): Promise<TextBlock[]> {
+  const res = await fetch(`${API_URL}/word/fee-proposal/text-blocks`);
+  if (!res.ok) throw await asError(res, 'Failed to fetch proposal wording');
+  return res.json();
+}
+
+export async function updateTextBlock(key: string, content: string, editedBy: string): Promise<TextBlock> {
+  const res = await fetch(`${API_URL}/word/fee-proposal/text-blocks/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, edited_by: editedBy }),
+  });
+  if (!res.ok) throw await asError(res, 'Failed to save proposal wording');
+  return res.json();
+}
+
+export async function resetTextBlock(key: string, editedBy: string): Promise<TextBlock> {
+  const res = await fetch(`${API_URL}/word/fee-proposal/text-blocks/${encodeURIComponent(key)}/reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ edited_by: editedBy }),
+  });
+  if (!res.ok) throw await asError(res, 'Failed to reset proposal wording');
+  return res.json();
+}
+
+export async function fetchTextBlockHistory(key: string): Promise<TextBlockHistoryEntry[]> {
+  const res = await fetch(`${API_URL}/word/fee-proposal/text-blocks/${encodeURIComponent(key)}/history`);
+  if (!res.ok) throw await asError(res, 'Failed to fetch wording history');
+  return res.json();
+}
+
+export async function restoreTextBlock(key: string, historyId: number, editedBy: string): Promise<TextBlock> {
+  const res = await fetch(`${API_URL}/word/fee-proposal/text-blocks/${encodeURIComponent(key)}/restore/${historyId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ edited_by: editedBy }),
+  });
+  if (!res.ok) throw await asError(res, 'Failed to restore wording version');
   return res.json();
 }
 

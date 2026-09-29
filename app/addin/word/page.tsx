@@ -186,7 +186,31 @@ export default function WordAddinPage() {
             {host === 'loading' ? 'Connecting to Word…' : inWord ? 'Connected to Word' : 'Preview mode (not inside Word)'}
           </p>
         </div>
-        {busy && <span className="text-xs text-blue-600 animate-pulse">{busy}…</span>}
+        <div className="flex items-center gap-2">
+          {busy && <span className="text-xs text-blue-600 animate-pulse">{busy}…</span>}
+          <a
+            href="/manage-word-addin-text"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Manage Word add-in proposal text"
+            title="Manage proposal text"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 0 1-2.4-2.4l.1-.1a1.7 1.7 0 0 0-1.2-2.9H4a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 0 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2V4a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 0 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z" />
+            </svg>
+          </a>
+        </div>
       </header>
 
       {devTools && (

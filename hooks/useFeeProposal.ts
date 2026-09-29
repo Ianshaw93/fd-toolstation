@@ -43,7 +43,8 @@ type Action =
 
 const DESIGN_STAGE_KEYS: ServiceKey1to4[] = [
   'stage_1', 'stage_2', 'london_plan', 'gateway', 'stage_3', 'stage_4',
-  'common_corridor_cfd', 'open_plan_cfd', 'warehouse_structural', 'warehouse_cfd',
+  'common_corridor_cfd', 'open_plan_cfd', 'warehouse_structural',
+  'tma_structural', 'time_equivalency_structural', 'fem_structural', 'warehouse_cfd',
 ];
 
 function initialState(): FeeProposalState {
@@ -60,6 +61,9 @@ function initialState(): FeeProposalState {
       stage_4: defaultServiceConfig(),
       common_corridor_cfd: defaultServiceConfig(),
       open_plan_cfd: defaultServiceConfig(),
+      tma_structural: defaultServiceConfig(),
+      time_equivalency_structural: defaultServiceConfig(),
+      fem_structural: defaultServiceConfig(),
       warehouse_structural: defaultServiceConfig(),
       warehouse_cfd: defaultServiceConfig(),
       peer_review: defaultServiceConfig(),

@@ -29,7 +29,9 @@ export const SERVICE_LABELS_1_4: Record<string, string> = {
   stage_4: 'RIBA Stage 4',
   common_corridor_cfd: 'Common Corridor CFD',
   open_plan_cfd: 'Open Plan CFD',
-  warehouse_structural: 'Warehouse Structural Fire Engineering',
+  tma_structural: 'TMA Structural Fire Engineering',
+  time_equivalency_structural: 'Time-Equivalency Structural Fire Engineering',
+  fem_structural: 'FEM Structural Fire Engineering',
   warehouse_cfd: 'Warehouse CFD',
   peer_review: 'Peer Review',
 };
@@ -53,6 +55,9 @@ export const SERVICE_LABELS_6: Record<string, string> = {
 export const SERVICES_WITH_MODELS = new Set([
   'common_corridor_cfd',
   'open_plan_cfd',
+  'tma_structural',
+  'time_equivalency_structural',
+  'fem_structural',
   'warehouse_structural',
   'warehouse_cfd',
   'peer_review',
