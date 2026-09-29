@@ -1,7 +1,7 @@
 'use client';
 
 import Script from 'next/script';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   fetchSections,
@@ -65,12 +65,29 @@ type Host = 'loading' | 'word' | 'preview';
 export default function WordAddinPage() {
   const [host, setHost] = useState<Host>('loading');
   const [tab, setTab] = useState<'fee' | 'tools'>('fee');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
   // The shareable add-in is the fee proposal only. The sections/citations experiments stay
   // reachable in development by opening the pane URL with ?dev=1 (localhost manifest).
   const [devTools, setDevTools] = useState(false);
   useEffect(() => {
     setDevTools(new URLSearchParams(window.location.search).get('dev') === '1');
   }, []);
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const closeOnPointerDown = (event: PointerEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) setSettingsOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSettingsOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnPointerDown);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnPointerDown);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [settingsOpen]);
   const [sections, setSections] = useState<Section[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [presentTags, setPresentTags] = useState<string[]>([]);
@@ -188,28 +205,43 @@ export default function WordAddinPage() {
         </div>
         <div className="flex items-center gap-2">
           {busy && <span className="text-xs text-blue-600 animate-pulse">{busy}…</span>}
-          <a
-            href="/manage-word-addin-text"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Manage Word add-in proposal text"
-            title="Manage proposal text"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-5 w-5"
+          <div ref={settingsRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setSettingsOpen((open) => !open)}
+              aria-expanded={settingsOpen}
+              aria-haspopup="dialog"
+              aria-label="Settings"
+              title="Settings"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
-              <circle cx="12" cy="12" r="3" />
-              <path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 0 1-2.4-2.4l.1-.1a1.7 1.7 0 0 0-1.2-2.9H4a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 0 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2V4a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 0 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z" />
-            </svg>
-          </a>
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                <path
+                  fillRule="evenodd"
+                  clipRule="evenodd"
+                  d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96c-.5-.38-1.05-.7-1.65-.95L14.35 2.8a.49.49 0 0 0-.48-.4h-3.84a.49.49 0 0 0-.48.4L9.19 5.34c-.6.25-1.15.57-1.65.95l-2.39-.96a.5.5 0 0 0-.61.22L2.62 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.04.3-.07.62-.07.94s.03.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.5.38 1.05.7 1.65.95l.36 2.54a.49.49 0 0 0 .48.4h3.84a.49.49 0 0 0 .48-.4l.36-2.54c.6-.25 1.15-.57 1.65-.95l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"
+                />
+              </svg>
+            </button>
+            {settingsOpen && (
+              <div
+                role="dialog"
+                aria-label="Settings"
+                className="absolute top-10 right-0 z-30 w-56 rounded-xl border border-gray-200 bg-white p-2 shadow-lg"
+              >
+                <p className="px-2 pb-1 pt-1 text-xs font-semibold text-gray-500">Settings</p>
+                <a
+                  href="/manage-word-addin-text"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setSettingsOpen(false)}
+                  className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-800 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  Edit Proposal Sections
+                </a>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
