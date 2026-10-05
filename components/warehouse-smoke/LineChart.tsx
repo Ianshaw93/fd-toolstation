@@ -20,6 +20,13 @@ export interface ChartMarker {
   label: string;
 }
 
+interface PlacedMarker extends ChartMarker {
+  x: number;
+  y: number;
+  anchor: 'start' | 'end';
+  dx: number;
+}
+
 interface LineChartProps {
   title: string;
   data: Record<string, number>[];
@@ -42,6 +49,59 @@ interface LineChartProps {
 
 const MARGIN = { top: 16, right: 20, bottom: 42, left: 62 };
 const DEFAULT_WIDTH = 640;
+
+/** Approx width of a short annotation like "ASET 1234 s" at 10px. */
+const MARKER_LABEL_WIDTH = 72;
+const MARKER_COINCIDE_PX = 10;
+const MARKER_LABEL_Y = 10;
+const MARKER_LABEL_Y_STACK = 22;
+
+function layoutMarkerLabels(
+  markers: ChartMarker[],
+  xScale: (v: number) => number,
+  plotWidth: number,
+): PlacedMarker[] {
+  const placed: PlacedMarker[] = markers.map((m) => ({
+    ...m,
+    x: xScale(m.value),
+    y: MARKER_LABEL_Y,
+    anchor: 'end',
+    dx: -4,
+  }));
+  const sorted = [...placed].sort((a, b) => a.x - b.x || a.label.localeCompare(b.label));
+
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1];
+    const curr = sorted[i];
+    const gap = curr.x - prev.x;
+    if (gap < MARKER_COINCIDE_PX) {
+      prev.anchor = 'end';
+      prev.dx = -6;
+      curr.anchor = 'start';
+      curr.dx = 6;
+      curr.y = MARKER_LABEL_Y;
+    } else if (gap < MARKER_LABEL_WIDTH) {
+      curr.anchor = 'start';
+      curr.dx = 4;
+      if (gap < 36) curr.y = MARKER_LABEL_Y_STACK;
+    }
+  }
+
+  for (const m of sorted) {
+    if (m.anchor === 'end' && m.x < 8) {
+      m.anchor = 'start';
+      m.dx = 6;
+    }
+    if (m.anchor === 'start' && m.x > plotWidth - 8) {
+      m.anchor = 'end';
+      m.dx = -6;
+      const sibling = sorted.find((o) => o !== m && Math.abs(o.x - m.x) < MARKER_COINCIDE_PX);
+      if (sibling && sibling.anchor === 'end') m.y = MARKER_LABEL_Y_STACK;
+    }
+  }
+
+  return sorted;
+}
 
 /** Round an axis range out to clean tick values. */
 function niceTicks(min: number, max: number, count = 5): number[] {
@@ -144,6 +204,11 @@ export default function LineChart({
 
   const yTicks = useMemo(() => niceTicks(yMin, yMax), [yMin, yMax]);
   const xTicks = useMemo(() => niceTicks(xMin, xMax), [xMin, xMax]);
+
+  const laidOutMarkers = useMemo(
+    () => layoutMarkerLabels(markers, xScale, plotWidth),
+    [markers, xScale, plotWidth],
+  );
 
   const paths = useMemo(
     () =>
@@ -264,11 +329,11 @@ export default function LineChart({
               </g>
             ))}
 
-            {markers.map((m) => (
-              <g key={`marker-${m.label}`}>
+            {laidOutMarkers.map((m) => (
+              <g key={`marker-${m.label}-${m.value}`}>
                 <line
-                  x1={xScale(m.value)}
-                  x2={xScale(m.value)}
+                  x1={m.x}
+                  x2={m.x}
                   y1={0}
                   y2={plotHeight}
                   stroke="#8a8781"
@@ -276,9 +341,9 @@ export default function LineChart({
                   strokeDasharray="4 3"
                 />
                 <text
-                  x={xScale(m.value) - 4}
-                  y={10}
-                  textAnchor="end"
+                  x={m.x + m.dx}
+                  y={m.y}
+                  textAnchor={m.anchor}
                   className="fill-gray-500"
                   style={ANNOTATION_STYLE}
                 >
