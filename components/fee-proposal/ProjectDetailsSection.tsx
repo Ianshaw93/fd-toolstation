@@ -81,7 +81,7 @@ export default function ProjectDetailsSection({ project, dispatch }: Props) {
             id="legislation"
             type="text"
             value={project.legislation}
-            placeholder="e.g. Building Bye Laws (Guernsey) 2012"
+            placeholder="e.g. Building Bye Laws (Jersey) 2007 (Part 2)"
             onChange={(e) => dispatch({ type: 'SET_PROJECT', field: 'legislation', value: e.target.value })}
             className="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
           />
