@@ -97,32 +97,69 @@ describe('run detail charts', () => {
     global.fetch = fetchMock as unknown as typeof fetch;
   });
 
-  it('draws recorded HRR and the design curve when the deck has one', async () => {
+  it('draws hrr.design from the series GET when the points are {t, hrr}', async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/series')) {
+        return json(
+          seriesBody({
+            cursor: '1',
+            hrr: [
+              { t: 0, hrr: 10 },
+              { t: 20, hrr: 40 },
+            ],
+            design: [
+              { t: 0, hrr: 0 },
+              { t: 60, hrr: 500 },
+            ],
+          }),
+        );
+      }
+      return json(detail);
+    });
+
     render(<RunDetailView runId={RUN} fromSearch={false} query="" user="" />);
 
     const chart = await screen.findByRole('img', { name: /Heat release rate/i });
     const paths = [...chart.querySelectorAll('path')];
     const recorded = paths.find((path) => path.getAttribute('stroke')?.toLowerCase() === '#4798ea');
     const design = paths.find((path) => path.getAttribute('stroke')?.toLowerCase() === '#e10600');
-    expect(recorded).toBeTruthy();
+    expect(recorded?.getAttribute('d')).toBe('M0.00,187.57 L186.00,176.75');
     expect(recorded?.getAttribute('stroke-dasharray')).toBeFalsy();
-    expect(design?.getAttribute('stroke-dasharray')).toBeTruthy();
+    expect(design?.getAttribute('d')).toBe('M0.00,191.18 L558.00,10.82');
+    expect(design?.getAttribute('stroke-dasharray')).toBe('2 4');
     expect(screen.getByText('Design HRR')).toBeInTheDocument();
+    expect(screen.getByText('Recorded HRR')).toBeInTheDocument();
     expect(screen.getByText('2 HRR samples')).toBeInTheDocument();
     expect(chart.innerHTML).not.toMatch(/Segoe UI/);
   });
 
-  it('omits the design curve when the deck has none', async () => {
+  it('leaves the recorded HRR chart unchanged when hrr.design is null', async () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/series')) {
-        return json(seriesBody({ cursor: '1', design: null }));
+        return json(
+          seriesBody({
+            cursor: '1',
+            hrr: [
+              { t: 0, hrr: 10 },
+              { t: 20, hrr: 40 },
+            ],
+            design: null,
+          }),
+        );
       }
       return json(detail);
     });
     render(<RunDetailView runId={RUN} fromSearch={false} query="" user="" />);
-    await screen.findByRole('img', { name: /Heat release rate/i });
+    const chart = await screen.findByRole('img', { name: /Heat release rate/i });
+    const paths = [...chart.querySelectorAll('path')];
+    expect(paths).toHaveLength(1);
+    expect(paths[0].getAttribute('stroke')?.toLowerCase()).toBe('#4798ea');
+    expect(paths[0].getAttribute('stroke-dasharray')).toBeFalsy();
+    expect(paths[0].getAttribute('d')).toBe('M0.00,146.09 L558.00,10.82');
     expect(screen.queryByText('Design HRR')).not.toBeInTheDocument();
+    expect(screen.getByText('2 HRR samples')).toBeInTheDocument();
   });
 
   it('filters devices by id or quantity and requests only the selected series', async () => {

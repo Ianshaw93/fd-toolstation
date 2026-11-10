@@ -67,7 +67,7 @@ describe('series contract', () => {
     expect(parsed.devc.bulk_0).toBeUndefined();
   });
 
-  it('treats a null design curve as no deck target', () => {
+  it('treats a null hrr.design as no design series', () => {
     const parsed = parseSeriesPayload({
       cursor: '1',
       hrr: { unit: 'kW', points: [{ t: 1, hrr: 2 }], design: null },
