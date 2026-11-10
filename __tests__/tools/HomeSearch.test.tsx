@@ -30,7 +30,7 @@ describe('ToolBrowser search', () => {
 
   it('shows dashboard cards when the query is empty', () => {
     render(<ToolBrowser />);
-    expect(screen.queryByRole('heading', { name: 'CFD Dashboard' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'CFD Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Sprinkler Grid Calculator' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'PDF Markup Tools' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Warehouse Smoke Layer' })).toBeInTheDocument();
@@ -112,13 +112,13 @@ describe('ToolBrowser search', () => {
     };
 
     await typeQuery('cfd');
-    expect(document.querySelector('[data-tool-id="cfd-dashboard"]')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-tool-id="cfd-dashboard"]')).toBeInTheDocument();
     expect(document.querySelector('[data-tool-id="cfd-post-processing"]')).toBeInTheDocument();
     expect(document.querySelector('[data-tool-id="upload-canvas-fdsGen"]')).toBeInTheDocument();
 
     await typeQuery('fds');
     expect(document.querySelector('[data-tool-id="upload-canvas-fdsGen"]')).toBeInTheDocument();
-    expect(document.querySelector('[data-tool-id="cfd-dashboard"]')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-tool-id="cfd-dashboard"]')).toBeInTheDocument();
     expect(document.querySelector('[data-tool-id="cfd-post-processing"]')).toBeInTheDocument();
 
     await typeQuery('macs');
