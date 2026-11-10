@@ -56,6 +56,14 @@ describe('run detail', () => {
       if (url.includes('/restart')) {
         return json({ detail: 'No .restart file for this case' }, 400);
       }
+      if (url.includes('/series')) {
+        return json({
+          cursor: '0',
+          hrr: { unit: 'kW', points: [], design: null },
+          devices: [],
+          series: {},
+        });
+      }
       if (init?.method === 'POST') return json({ ok: true, command: 'stop' });
       return json(detail);
     });
@@ -85,8 +93,10 @@ describe('run detail', () => {
     render(<RunDetailView runId={RUN} fromSearch query="corridor" user="ian" />);
     await screen.findByText('corridor-a');
 
-    const first = String(fetchMock.mock.calls[0][0]);
-    const parsed = new URL(first, 'http://localhost');
+    const detailUrl = fetchMock.mock.calls
+      .map((call) => String(call[0]))
+      .find((url) => new URL(url, 'http://localhost').pathname === `/api/cfd-dashboard/runs/${RUN}`);
+    const parsed = new URL(detailUrl ?? '', 'http://localhost');
     expect(parsed.pathname).toBe(`/api/cfd-dashboard/runs/${RUN}`);
     expect(parsed.searchParams.get('from')).toBe('search');
     expect(parsed.searchParams.get('q')).toBe('corridor');

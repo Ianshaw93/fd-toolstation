@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import ConfirmDialog from '../fee-proposal/ConfirmDialog';
+import RunCharts from './RunCharts';
 import {
   formatProgress,
   formatTimestamp,
@@ -185,6 +186,8 @@ export default function RunDetailView({
                 </a>
               ) : null}
             </section>
+
+            <RunCharts runId={runId} />
 
             <section className="mb-8" aria-label="Cost">
               <h2 className="text-lg font-semibold mb-2">Cost</h2>

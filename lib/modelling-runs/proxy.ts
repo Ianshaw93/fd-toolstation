@@ -9,7 +9,7 @@
  */
 
 const DEFAULT_API = 'https://backendfornextapp-production.up.railway.app';
-const ALLOWED_QUERY = ['target', 'machine_id', 'status', 'q', 'user', 'created_by', 'from'] as const;
+const ALLOWED_QUERY = ['target', 'machine_id', 'status', 'q', 'user', 'created_by', 'from', 'since', 'devices'] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type ProxyResult = {
@@ -25,7 +25,15 @@ export type ProxyInput = {
   bodyText: string | null;
 };
 
-type RouteKind = 'state' | 'machines' | 'runs-list' | 'run-detail' | 'run-create' | 'run-stop' | 'run-restart';
+type RouteKind =
+  | 'state'
+  | 'machines'
+  | 'runs-list'
+  | 'run-detail'
+  | 'run-series'
+  | 'run-create'
+  | 'run-stop'
+  | 'run-restart';
 
 type RouteMatch = {
   kind: RouteKind;
@@ -95,6 +103,9 @@ function matchRoute(segments: string[], method: string): RouteMatch | 'method' |
   if (segments.length === 2 && segments[0] === 'runs' && UUID.test(segments[1])) {
     return method === 'GET' ? { kind: 'run-detail', upstreamPath: `runs/${segments[1]}` } : 'method';
   }
+  if (segments.length === 3 && segments[0] === 'runs' && UUID.test(segments[1]) && segments[2] === 'series') {
+    return method === 'GET' ? { kind: 'run-series', upstreamPath: `runs/${segments[1]}/series` } : 'method';
+  }
   if (
     segments.length === 3 &&
     segments[0] === 'runs' &&
@@ -113,6 +124,10 @@ function matchRoute(segments: string[], method: string): RouteMatch | 'method' |
 function buildUrl(upstreamPath: string, search: URLSearchParams, statusOverride?: string): string {
   const url = new URL(`${apiBase()}/cfd-dashboard/${upstreamPath}`);
   for (const key of ALLOWED_QUERY) {
+    if (key === 'devices' && search.has('devices')) {
+      url.searchParams.set('devices', search.get('devices') ?? '');
+      continue;
+    }
     const value = key === 'status' && statusOverride !== undefined ? statusOverride : search.get(key);
     if (value) url.searchParams.set(key, value);
   }
