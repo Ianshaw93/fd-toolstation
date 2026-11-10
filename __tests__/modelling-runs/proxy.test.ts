@@ -225,6 +225,75 @@ describe('cfd-dashboard proxy', () => {
     expect(init.headers['Content-Type']).toBe('application/json');
   });
 
+  it('forwards a series read with since and devices and redacts the key', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      text: async () => JSON.stringify({ cursor: '2', echo: KEY, hrr: { points: [], design: null } }),
+    });
+
+    const result = await call(
+      'GET',
+      ['runs', RUN_ID, 'series'],
+      'after=1&since=1&devices=TC_01&api_key=nope',
+    );
+
+    expect(result.status).toBe(200);
+    expect(result.body).not.toContain(KEY);
+    expect(JSON.parse(result.body).echo).toBe('[redacted]');
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    const parsed = new URL(url);
+    expect(parsed.pathname).toBe(`/cfd-dashboard/runs/${RUN_ID}/series`);
+    expect(parsed.searchParams.get('after')).toBe('1');
+    expect(parsed.searchParams.get('since')).toBe('1');
+    expect(parsed.searchParams.get('devices')).toBe('TC_01');
+    expect(parsed.searchParams.get('api_key')).toBeNull();
+    expect(init.method).toBe('GET');
+    expect(init.headers['X-API-Key']).toBe(KEY);
+    expect(init.body).toBeUndefined();
+
+    (global.fetch as jest.Mock).mockClear();
+    await call('GET', ['runs', RUN_ID, 'series'], 'devices=');
+    const emptyDevices = new URL((global.fetch as jest.Mock).mock.calls[0][0]);
+    expect(emptyDevices.pathname).toBe(`/cfd-dashboard/runs/${RUN_ID}/series`);
+    expect(emptyDevices.searchParams.has('devices')).toBe(true);
+    expect(emptyDevices.searchParams.get('devices')).toBe('');
+  });
+
+  it('saves selected_devc server-side and does not forward sample rows or the runner ingest', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      text: async () => JSON.stringify({ selected_devc: ['TC_01'], echo: KEY }),
+    });
+
+    const result = await call(
+      'POST',
+      ['runs', RUN_ID, 'series'],
+      '',
+      JSON.stringify({
+        selected_devc: ['TC_01'],
+        hrr: [{ t: 1, hrr: 9 }],
+        devc: { TC_01: [{ t: 1, v: 2 }], bulk_0: [{ t: 1, v: 3 }] },
+      }),
+    );
+
+    expect(result.status).toBe(200);
+    expect(result.body).not.toContain(KEY);
+    expect(JSON.parse(result.body).selected_devc).toEqual(['TC_01']);
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toBe(`http://backend.test/cfd-dashboard/runs/${RUN_ID}/series`);
+    expect(init.method).toBe('POST');
+    expect(init.headers['X-API-Key']).toBe(KEY);
+    expect(JSON.parse(init.body)).toEqual({ selected_devc: ['TC_01'] });
+
+    (global.fetch as jest.Mock).mockClear();
+    expect((await call('POST', ['series'], '', '{"hrr":[{"t":1,"hrr":2}]}')).status).toBe(404);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('rejects runner-only routes, non-uuids, and the wrong method', async () => {
     expect((await call('GET', ['commands'])).status).toBe(404);
     expect((await call('GET', ['runs', 'not-a-uuid'])).status).toBe(404);

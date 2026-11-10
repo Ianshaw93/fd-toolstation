@@ -10,5 +10,6 @@ module.exports = {
   },
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
+    '^plotly\\.js-dist-min$': '<rootDir>/__mocks__/plotly-dist-min.js',
   },
 };

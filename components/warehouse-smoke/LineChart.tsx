@@ -6,6 +6,10 @@ export interface ChartSeries {
   key: string;
   label: string;
   color: string;
+  /** SVG stroke-dasharray. Used for the design HRR overlay. */
+  dash?: string;
+  /** Own x/y samples when this series is not aligned to `data` rows. */
+  points?: { x: number; y: number }[];
 }
 
 export interface ChartThreshold {
@@ -38,6 +42,8 @@ interface LineChartProps {
   height?: number;
   decimals?: number;
   unit?: string;
+  /** Stroke width in SVG units. House FDS charts use a thin line. */
+  strokeWidth?: number;
 }
 
 const MARGIN = { top: 16, right: 20, bottom: 42, left: 62 };
@@ -67,9 +73,9 @@ function formatTick(value: number): string {
   return value.toLocaleString('en-GB', { maximumFractionDigits: 2 });
 }
 
-const TICK_STYLE = { fontSize: 11, fontVariantNumeric: 'tabular-nums' as const };
-const LABEL_STYLE = { fontSize: 11 };
-const ANNOTATION_STYLE = { fontSize: 10 };
+const TICK_STYLE = { fontSize: 11, fontFamily: 'inherit', fontVariantNumeric: 'tabular-nums' as const };
+const LABEL_STYLE = { fontSize: 11, fontFamily: 'inherit' };
+const ANNOTATION_STYLE = { fontSize: 10, fontFamily: 'inherit' };
 
 export default function LineChart({
   title,
@@ -85,6 +91,7 @@ export default function LineChart({
   height = 260,
   decimals = 2,
   unit = '',
+  strokeWidth = 2,
 }: LineChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
@@ -105,10 +112,24 @@ export default function LineChart({
   const plotHeight = Math.max(height - MARGIN.top - MARGIN.bottom, 10);
 
   const { xMin, xMax, yMin, yMax } = useMemo(() => {
-    const xs = data.map((d) => d[xKey]);
+    const xs: number[] = [];
     const ys: number[] = [];
     for (const d of data) {
-      for (const s of series) ys.push(d[s.key]);
+      const x = d[xKey];
+      if (Number.isFinite(x)) xs.push(x);
+    }
+    for (const s of series) {
+      if (s.points) {
+        for (const point of s.points) {
+          if (Number.isFinite(point.x)) xs.push(point.x);
+          if (Number.isFinite(point.y)) ys.push(point.y);
+        }
+        continue;
+      }
+      for (const d of data) {
+        const y = d[s.key];
+        if (Number.isFinite(y)) ys.push(y);
+      }
     }
     for (const t of thresholds) ys.push(t.value);
 
@@ -147,17 +168,36 @@ export default function LineChart({
 
   const paths = useMemo(
     () =>
-      series.map((s) => ({
-        ...s,
-        d: data
-          .map(
-            (row, i) =>
-              `${i === 0 ? 'M' : 'L'}${xScale(row[xKey]).toFixed(2)},${yScale(row[s.key]).toFixed(2)}`,
-          )
-          .join(' '),
-      })),
+      series.map((s) => {
+        const samples = s.points ?? data.map((row) => ({ x: row[xKey], y: row[s.key] }));
+        let d = '';
+        let started = false;
+        for (const point of samples) {
+          if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
+          d += `${started ? ' L' : 'M'}${xScale(point.x).toFixed(2)},${yScale(point.y).toFixed(2)}`;
+          started = true;
+        }
+        return { ...s, d };
+      }),
     [series, data, xKey, xScale, yScale],
   );
+
+  const valueAt = (s: ChartSeries, row: Record<string, number>): number | null => {
+    if (s.points && s.points.length > 0) {
+      let best = s.points[0];
+      let bestDist = Math.abs(best.x - row[xKey]);
+      for (const point of s.points) {
+        const dist = Math.abs(point.x - row[xKey]);
+        if (dist < bestDist) {
+          best = point;
+          bestDist = dist;
+        }
+      }
+      return Number.isFinite(best.y) ? best.y : null;
+    }
+    const value = row[s.key];
+    return Number.isFinite(value) ? value : null;
+  };
 
   const handleMove = (event: React.MouseEvent<SVGRectElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -182,7 +222,11 @@ export default function LineChart({
             <span key={s.key} className="inline-flex items-center gap-1.5 text-xs text-gray-600">
               <span
                 className="w-3 h-0.5 rounded-full"
-                style={{ backgroundColor: s.color }}
+                style={
+                  s.dash
+                    ? { backgroundColor: 'transparent', borderTop: `2px dotted ${s.color}` }
+                    : { backgroundColor: s.color }
+                }
                 aria-hidden="true"
               />
               {s.label}
@@ -293,9 +337,10 @@ export default function LineChart({
                 d={p.d}
                 fill="none"
                 stroke={p.color}
-                strokeWidth={2}
+                strokeWidth={strokeWidth}
                 strokeLinejoin="round"
                 strokeLinecap="round"
+                strokeDasharray={p.dash}
               />
             ))}
 
@@ -309,17 +354,21 @@ export default function LineChart({
                   stroke="#b5b2ab"
                   strokeWidth={1}
                 />
-                {series.map((s) => (
-                  <circle
-                    key={s.key}
-                    cx={xScale(hovered[xKey])}
-                    cy={yScale(hovered[s.key])}
-                    r={4}
-                    fill={s.color}
-                    stroke="#ffffff"
-                    strokeWidth={2}
-                  />
-                ))}
+                {series.map((s) => {
+                  const value = valueAt(s, hovered);
+                  if (value === null) return null;
+                  return (
+                    <circle
+                      key={s.key}
+                      cx={xScale(hovered[xKey])}
+                      cy={yScale(value)}
+                      r={4}
+                      fill={s.color}
+                      stroke="#ffffff"
+                      strokeWidth={2}
+                    />
+                  );
+                })}
               </g>
             )}
 
@@ -366,20 +415,24 @@ export default function LineChart({
             <div className="font-medium text-gray-900 mb-1 tabular-nums">
               {formatTick(hovered[xKey])} s
             </div>
-            {series.map((s) => (
-              <div key={s.key} className="flex items-center gap-2 text-gray-600">
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: s.color }}
-                  aria-hidden="true"
-                />
-                <span>{s.label}</span>
-                <span className="ml-auto pl-3 tabular-nums text-gray-900">
-                  {hovered[s.key].toFixed(decimals)}
-                  {unit}
-                </span>
-              </div>
-            ))}
+            {series.map((s) => {
+              const value = valueAt(s, hovered);
+              if (value === null) return null;
+              return (
+                <div key={s.key} className="flex items-center gap-2 text-gray-600">
+                  <span
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: s.color }}
+                    aria-hidden="true"
+                  />
+                  <span>{s.label}</span>
+                  <span className="ml-auto pl-3 tabular-nums text-gray-900">
+                    {value.toFixed(decimals)}
+                    {unit}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
