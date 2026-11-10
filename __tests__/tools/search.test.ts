@@ -141,23 +141,22 @@ describe('searchTools — real catalogue', () => {
         'Fee Proposal Generator',
         'External Fire Spread Calculator',
         'Warehouse Smoke Layer',
+        'CFD Dashboard',
       ]),
     );
-    expect(result.matches.some((t) => t.id === 'cfd-dashboard')).toBe(false);
+    expect(result.matches.some((t) => t.id === 'cfd-dashboard')).toBe(true);
   });
 
-  it('short query "cfd" includes post-processing and FDS gen, not the shelved dashboard', () => {
+  it('short query "cfd" includes the dashboard, post-processing, and FDS gen', () => {
     const result = searchTools('cfd');
     const ids = result.matches.map((t) => t.id);
-    expect(ids).toEqual(expect.arrayContaining(['cfd-post-processing', 'upload-canvas-fdsGen']));
-    expect(ids).not.toContain('cfd-dashboard');
+    expect(ids).toEqual(expect.arrayContaining(['cfd-dashboard', 'cfd-post-processing', 'upload-canvas-fdsGen']));
   });
 
   it('short query "fds" includes the same CFD/FDS family the other way round', () => {
     const result = searchTools('fds');
     const ids = result.matches.map((t) => t.id);
-    expect(ids).toEqual(expect.arrayContaining(['upload-canvas-fdsGen', 'cfd-post-processing']));
-    expect(ids).not.toContain('cfd-dashboard');
+    expect(ids).toEqual(expect.arrayContaining(['cfd-dashboard', 'upload-canvas-fdsGen', 'cfd-post-processing']));
   });
 
   it('treats cfd and fds as bidirectional synonyms', () => {

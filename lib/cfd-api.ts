@@ -1,5 +1,3 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backendfornextapp-production.up.railway.app';
-
 export interface CfdSimulation {
   id: number;
   name: string;
@@ -27,9 +25,14 @@ export interface CfdDashboardState {
 }
 
 export async function fetchDashboardState(): Promise<CfdDashboardState> {
-  const res = await fetch(`${API_URL}/cfd-dashboard/state`);
+  const res = await fetch('/api/cfd-dashboard/state', { cache: 'no-store' });
+  const body = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new Error('Failed to fetch dashboard state');
+    const detail =
+      body && typeof body === 'object' && typeof (body as { detail?: unknown }).detail === 'string'
+        ? (body as { detail: string }).detail
+        : 'Failed to fetch dashboard state';
+    throw new Error(detail);
   }
-  return res.json();
+  return body as CfdDashboardState;
 }

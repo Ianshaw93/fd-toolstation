@@ -173,7 +173,7 @@ export const CATALOGUE: ToolPart[] = [
     parentTool: 'CFD Dashboard',
     parentId: 'cfd-dashboard',
     kind: 'web',
-    description: "Live FDS simulation status — see what's running, progress, and queue",
+    description: 'Live FDS runs — progress, logs, and start, stop, or restart on the office machines.',
     aliases: ['cfd', 'fds dashboard', 'simulation queue'],
     phrases: ['fds simulation status'],
     url: '/cfd-dashboard',
@@ -181,7 +181,6 @@ export const CATALOGUE: ToolPart[] = [
     icon: '🖥️',
     liveStatus: 'cfd',
     showOnDashboard: true,
-    shelved: true,
   },
   {
     id: 'cfd-post-processing',

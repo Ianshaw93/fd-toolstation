@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchDashboardState, CfdDashboardState } from '../../lib/cfd-api';
+import { MODELLING_POLL_MS } from '../../lib/modelling-runs/client';
 import { dashboardCards } from '../../lib/tools/catalogue';
 import { navigateToTool } from '../../lib/tools/search';
 import ToolCard from './ToolCard';
@@ -24,7 +25,7 @@ function useCfdStatus() {
     }
 
     poll();
-    const interval = setInterval(poll, 15_000);
+    const interval = setInterval(poll, MODELLING_POLL_MS);
     return () => {
       active = false;
       clearInterval(interval);

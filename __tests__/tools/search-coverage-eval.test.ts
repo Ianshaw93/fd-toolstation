@@ -6,17 +6,16 @@ import { searchTools } from '../../lib/tools/search';
  * Catches silent shelving / omitted catalogue rows. Does not assert rank.
  *
  * `cfd` / `fds` are the same family: fire-engineering CFD here uses FDS, so
- * either query must hit post-processing and FDS generation. CFD Dashboard is
- * shelved and must stay out of both browse and search.
+ * either query must hit the CFD dashboard, post-processing, and FDS generation.
  */
 export const SEARCH_COVERAGE_EVAL: Array<{ query: string; expectedIds: string[] }> = [
   {
     query: 'cfd',
-    expectedIds: ['cfd-post-processing', 'upload-canvas-fdsGen'],
+    expectedIds: ['cfd-dashboard', 'cfd-post-processing', 'upload-canvas-fdsGen'],
   },
   {
     query: 'fds',
-    expectedIds: ['upload-canvas-fdsGen', 'cfd-post-processing'],
+    expectedIds: ['cfd-dashboard', 'upload-canvas-fdsGen', 'cfd-post-processing'],
   },
   { query: 'warehouse', expectedIds: ['warehouse-smoke'] },
   { query: 'BRE', expectedIds: ['efs-calculator'] },
