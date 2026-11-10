@@ -1,3 +1,5 @@
+import { parseSelectedDevc } from './series';
+
 /**
  * Server-side proxy for /cfd-dashboard.
  * The browser calls /api/cfd-dashboard/* and never sees FDS_API_KEY.
@@ -9,7 +11,7 @@
  */
 
 const DEFAULT_API = 'https://backendfornextapp-production.up.railway.app';
-const ALLOWED_QUERY = ['target', 'machine_id', 'status', 'q', 'user', 'created_by', 'from', 'since', 'devices'] as const;
+const ALLOWED_QUERY = ['target', 'machine_id', 'status', 'q', 'user', 'created_by', 'from', 'since', 'after', 'devices'] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type ProxyResult = {
@@ -31,6 +33,7 @@ type RouteKind =
   | 'runs-list'
   | 'run-detail'
   | 'run-series'
+  | 'run-series-select'
   | 'run-create'
   | 'run-stop'
   | 'run-restart';
@@ -104,7 +107,9 @@ function matchRoute(segments: string[], method: string): RouteMatch | 'method' |
     return method === 'GET' ? { kind: 'run-detail', upstreamPath: `runs/${segments[1]}` } : 'method';
   }
   if (segments.length === 3 && segments[0] === 'runs' && UUID.test(segments[1]) && segments[2] === 'series') {
-    return method === 'GET' ? { kind: 'run-series', upstreamPath: `runs/${segments[1]}/series` } : 'method';
+    if (method === 'GET') return { kind: 'run-series', upstreamPath: `runs/${segments[1]}/series` };
+    if (method === 'POST') return { kind: 'run-series-select', upstreamPath: `runs/${segments[1]}/series` };
+    return 'method';
   }
   if (
     segments.length === 3 &&
@@ -132,6 +137,17 @@ function buildUrl(upstreamPath: string, search: URLSearchParams, statusOverride?
     if (value) url.searchParams.set(key, value);
   }
   return url.toString();
+}
+
+/** Picker save only. Sample rows stay on the runner ingest, which this proxy does not expose. */
+function selectionBody(bodyText: string | null): string {
+  let parsed: unknown = null;
+  try {
+    parsed = bodyText ? JSON.parse(bodyText) : null;
+  } catch {
+    parsed = null;
+  }
+  return JSON.stringify({ selected_devc: parseSelectedDevc(parsed) });
 }
 
 function upstreamInit(method: string, key: string, bodyText: string | null): RequestInit {
@@ -202,7 +218,8 @@ export async function proxyCfdDashboard(input: ProxyInput): Promise<ProxyResult>
   if (route === 'method') return jsonResult(405, { detail: 'Method not allowed' });
   if (route === null) return jsonResult(404, { detail: 'Unknown modelling route' });
 
-  const init = upstreamInit(method, key, input.bodyText);
+  const bodyText = route.kind === 'run-series-select' ? selectionBody(input.bodyText) : input.bodyText;
+  const init = upstreamInit(method, key, bodyText);
   try {
     const failedFilter =
       route.kind === 'runs-list' &&

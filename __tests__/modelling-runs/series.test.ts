@@ -1,9 +1,13 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import {
+  SERIES_MAX_POINTS,
+  SERIES_MIN_DT,
   applySeriesPayload,
+  capSeries,
   deviceMatches,
   emptySeriesView,
+  parseSelectedDevc,
   parseSeriesPayload,
   seriesPath,
   type DeviceColumn,
@@ -15,16 +19,14 @@ describe('series contract', () => {
   it('builds a same-origin series URL and never puts a key on it', () => {
     const first = new URL(seriesPath(RUN_ID), 'http://localhost');
     expect(first.pathname).toBe(`/api/cfd-dashboard/runs/${RUN_ID}/series`);
-    expect(first.searchParams.get('devices')).toBe('');
+    expect(first.searchParams.get('after')).toBeNull();
     expect(first.searchParams.get('since')).toBeNull();
     expect(first.search).not.toMatch(/api_key|X-API-Key|FDS_API_KEY/i);
 
-    const next = new URL(
-      seriesPath(RUN_ID, { since: '9', devices: ['TC_01', 'VIS_02'] }),
-      'http://localhost',
-    );
+    const next = new URL(seriesPath(RUN_ID, { after: '9' }), 'http://localhost');
+    expect(next.searchParams.get('after')).toBe('9');
     expect(next.searchParams.get('since')).toBe('9');
-    expect(next.searchParams.get('devices')).toBe('TC_01,VIS_02');
+    expect(next.searchParams.get('devices')).toBeNull();
   });
 
   it('parses the cursor, HRR points, a design curve, and the device catalog', () => {
@@ -32,20 +34,21 @@ describe('series contract', () => {
       cursor: 4,
       hrr: {
         points: [
-          { t: 0, v: 0 },
-          { t: '10', v: '120.5' },
-          { t: 'nope', v: 1 },
+          { t: 0, hrr: 0 },
+          { t: '10', hrr: '120.5' },
+          { t: 'nope', hrr: 1 },
         ],
         design: [
-          { t: 0, v: 0 },
-          { t: 30, v: 500 },
+          { t: 0, hrr: 0 },
+          { t: 30, hrr: 500 },
         ],
       },
       devices: [
         { id: 'TC_01', quantity: 'TEMPERATURE', unit: 'C' },
         { id: 'VIS_02', quantity: 'VISIBILITY' },
       ],
-      series: { TC_01: [{ t: 0, v: 20 }] },
+      devc: { TC_01: [{ t: 0, v: 20 }], bulk_0: [{ t: 0, v: 1 }] },
+      selected_devc: ['TC_01'],
     });
 
     expect(parsed.cursor).toBe('4');
@@ -59,15 +62,18 @@ describe('series contract', () => {
       { t: 30, v: 500 },
     ]);
     expect(parsed.devices.map((device) => device.id)).toEqual(['TC_01', 'VIS_02']);
-    expect(parsed.series.TC_01).toEqual([{ t: 0, v: 20 }]);
+    expect(parsed.selectedDevc).toEqual(['TC_01']);
+    expect(parsed.devc.TC_01).toEqual([{ t: 0, v: 20 }]);
+    expect(parsed.devc.bulk_0).toBeUndefined();
   });
 
   it('treats a null design curve as no deck target', () => {
     const parsed = parseSeriesPayload({
       cursor: '1',
-      hrr: { unit: 'kW', points: [{ t: 1, v: 2 }], design: null },
+      hrr: { unit: 'kW', points: [{ t: 1, hrr: 2 }], design: null },
       devices: [],
-      series: {},
+      devc: {},
+      selected_devc: [],
     });
     expect(parsed.hrr.design).toBeNull();
   });
@@ -85,13 +91,14 @@ describe('series contract', () => {
         hrr: {
           unit: 'kW',
           points: [
-            { t: 0, v: 0 },
-            { t: 10, v: 100 },
+            { t: 0, hrr: 0 },
+            { t: 10, hrr: 100 },
           ],
-          design: [{ t: 0, v: 0 }, { t: 10, v: 80 }],
+          design: [{ t: 0, hrr: 0 }, { t: 10, hrr: 80 }],
         },
         devices: [{ id: 'TC_01', quantity: 'TEMPERATURE' }],
-        series: {},
+        devc: {},
+        selected_devc: [],
       }),
       'replace',
     );
@@ -102,13 +109,14 @@ describe('series contract', () => {
         hrr: {
           unit: 'kW',
           points: [
-            { t: 10, v: 100 },
-            { t: 20, v: 250 },
+            { t: 10, hrr: 100 },
+            { t: 20, hrr: 250 },
           ],
-          design: [{ t: 0, v: 0 }, { t: 10, v: 80 }],
+          design: [{ t: 0, hrr: 0 }, { t: 10, hrr: 80 }],
         },
         devices: [{ id: 'TC_01', quantity: 'TEMPERATURE' }],
-        series: { TC_01: [{ t: 20, v: 40 }] },
+        devc: { TC_01: [{ t: 20, v: 40 }] },
+        selected_devc: ['TC_01'],
       }),
       'append',
     );
@@ -119,7 +127,8 @@ describe('series contract', () => {
       [10, 100],
       [20, 250],
     ]);
-    expect(appended.selected.TC_01).toEqual([{ t: 20, v: 40 }]);
+    expect(appended.selectedDevc).toEqual(['TC_01']);
+    expect(appended.devc.TC_01).toEqual([{ t: 20, v: 40 }]);
     expect(appended.design).toEqual([
       { t: 0, v: 0 },
       { t: 10, v: 80 },
@@ -129,21 +138,37 @@ describe('series contract', () => {
       appended,
       parseSeriesPayload({
         cursor: '8',
-        hrr: { unit: 'kW', points: [{ t: 0, v: 0 }], design: null },
+        hrr: { unit: 'kW', points: [{ t: 0, hrr: 0 }], design: null },
         devices: [{ id: 'VIS_02', quantity: 'VISIBILITY' }],
-        series: {
+        devc: {
           VIS_02: [
             { t: 0, v: 30 },
             { t: 10, v: 12 },
           ],
+          TC_01: [{ t: 0, v: 99 }],
         },
+        selected_devc: 'VIS_02',
       }),
       'replace',
     );
     expect(replaced.design).toBeNull();
     expect(replaced.hrr).toEqual([{ t: 0, v: 0 }]);
-    expect(replaced.selected.TC_01).toBeUndefined();
-    expect(replaced.selected.VIS_02.map((point) => point.t)).toEqual([0, 10]);
+    expect(replaced.devc.TC_01).toBeUndefined();
+    expect(replaced.selectedDevc).toEqual(['VIS_02']);
+    expect(replaced.devc.VIS_02.map((point) => point.t)).toEqual([0, 10]);
+    expect(parseSelectedDevc({ selected_devc: ['TC_01', 'TC_01', '  '] })).toEqual(['TC_01']);
+  });
+
+  it('caps live samples at one second and 60 points', () => {
+    expect(SERIES_MIN_DT).toBe(1);
+    expect(SERIES_MAX_POINTS).toBe(60);
+    const dense = Array.from({ length: 200 }, (_, i) => ({ t: i * 0.5, v: i }));
+    const capped = capSeries(dense);
+    expect(capped).toHaveLength(60);
+    expect(capped[0].t).toBe(40);
+    for (let i = 1; i < capped.length; i += 1) {
+      expect(capped[i].t - capped[i - 1].t).toBeGreaterThanOrEqual(SERIES_MIN_DT);
+    }
   });
 
   it('searches devices by id or by temperature, visibility, pressure, and velocity', () => {

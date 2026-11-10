@@ -61,7 +61,8 @@ describe('run detail', () => {
           cursor: '0',
           hrr: { unit: 'kW', points: [], design: null },
           devices: [],
-          series: {},
+          devc: {},
+          selected_devc: [],
         });
       }
       if (init?.method === 'POST') return json({ ok: true, command: 'stop' });

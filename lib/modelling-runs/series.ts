@@ -1,19 +1,21 @@
 /**
  * Live HRR and DEVC series for the run page.
  *
- * The browser only calls `/api/cfd-dashboard/runs/{id}/series`.
- * The server route attaches the API key.
+ * The browser polls `/api/cfd-dashboard/runs/{id}/series?after=&since=`.
+ * Choosing a device POSTs `{ selected_devc }` to that same path.
+ * The server route attaches the API key. The runner ingest
+ * `POST /cfd-dashboard/series` is not a browser route.
  *
- * Stable shape shared with the backend:
- * `GET .../series?since={cursor}&devices={id,id}`
- * - `devices` is always sent. Empty means the column catalog only.
- * - `since` is omitted on the first read and when the selected device changes.
- * - Body: `{ cursor, hrr: { unit, points: [{t,v}], design: [{t,v}] | null },
- *   devices: [{id, quantity, unit?}], series: { [id]: [{t,v}] } }`
- * - `design` is null when the deck has no target curve.
- * - `series` holds samples for the requested ids, not every DEVC column.
- * CSV parsing stays in the backend (`hrr_graph` and the hrr/devc file pair).
+ * Wire shape, aligned with the runner chart API:
+ * - HRR samples are `{t, hrr}`.
+ * - `devc` holds samples only for `selected_devc` (id and quantity catalog is separate).
+ * - `selected_devc` is what the runner charts next.
+ * - Live samples are capped at SERIES_MIN_DT seconds and SERIES_MAX_POINTS.
+ * CSV parsing stays on the backend. This page does not reimplement it.
  */
+
+export const SERIES_MIN_DT = 1;
+export const SERIES_MAX_POINTS = 60;
 
 export interface SeriesPoint {
   t: number;
@@ -34,7 +36,8 @@ export interface SeriesPayload {
     design: SeriesPoint[] | null;
   };
   devices: DeviceColumn[];
-  series: Record<string, SeriesPoint[]>;
+  devc: Record<string, SeriesPoint[]>;
+  selectedDevc: string[];
 }
 
 export interface SeriesView {
@@ -43,7 +46,8 @@ export interface SeriesView {
   hrr: SeriesPoint[];
   design: SeriesPoint[] | null;
   devices: DeviceColumn[];
-  selected: Record<string, SeriesPoint[]>;
+  devc: Record<string, SeriesPoint[]>;
+  selectedDevc: string[];
 }
 
 const QUANTITY_TERMS: Record<string, string[]> = {
@@ -60,32 +64,65 @@ export function emptySeriesView(): SeriesView {
     hrr: [],
     design: null,
     devices: [],
-    selected: {},
+    devc: {},
+    selectedDevc: [],
   };
 }
 
-export function seriesPath(
-  id: string,
-  opts?: { since?: string | null; devices?: string[] },
-): string {
+export function seriesPath(id: string, opts?: { after?: string | null }): string {
   const params = new URLSearchParams();
-  if (opts?.since) params.set('since', opts.since);
-  params.set('devices', (opts?.devices ?? []).join(','));
-  return `/api/cfd-dashboard/runs/${encodeURIComponent(id)}/series?${params.toString()}`;
+  if (opts?.after) {
+    params.set('after', opts.after);
+    params.set('since', opts.after);
+  }
+  const path = `/api/cfd-dashboard/runs/${encodeURIComponent(id)}/series`;
+  const qs = params.toString();
+  return qs ? `${path}?${qs}` : path;
 }
 
-function parsePoints(value: unknown): SeriesPoint[] {
+export function parseSelectedDevc(data: unknown): string[] {
+  if (!data || typeof data !== 'object') return [];
+  const raw = (data as { selected_devc?: unknown }).selected_devc;
+  if (typeof raw === 'string') return raw.trim() ? [raw.trim()] : [];
+  if (!Array.isArray(raw)) return [];
+  const ids: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string') continue;
+    const id = item.trim();
+    if (id && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
+function asPointList(value: unknown, valueKey: 'hrr' | 'v'): SeriesPoint[] {
   if (!Array.isArray(value)) throw new Error('Unexpected series response');
   const points: SeriesPoint[] = [];
   for (const item of value) {
     if (!item || typeof item !== 'object') continue;
-    const record = item as { t?: unknown; v?: unknown };
+    const record = item as { t?: unknown; hrr?: unknown; v?: unknown };
     const t = Number(record.t);
-    const v = Number(record.v);
+    const raw = valueKey === 'hrr' ? record.hrr : record.v;
+    const v = Number(raw);
     if (!Number.isFinite(t) || !Number.isFinite(v)) continue;
     points.push({ t, v });
   }
   return points;
+}
+
+export function capSeries(points: SeriesPoint[]): SeriesPoint[] {
+  const ordered = [...points].sort((a, b) => a.t - b.t);
+  const kept: SeriesPoint[] = [];
+  for (const point of ordered) {
+    const last = kept[kept.length - 1];
+    if (last && point.t - last.t < SERIES_MIN_DT) continue;
+    if (last && point.t === last.t) {
+      kept[kept.length - 1] = point;
+      continue;
+    }
+    kept.push(point);
+  }
+  if (kept.length > SERIES_MAX_POINTS) return kept.slice(kept.length - SERIES_MAX_POINTS);
+  return kept;
 }
 
 function sortPoints(points: SeriesPoint[]): SeriesPoint[] {
@@ -96,21 +133,24 @@ export function mergePoints(existing: SeriesPoint[], incoming: SeriesPoint[]): S
   const byTime = new Map<number, SeriesPoint>();
   for (const point of existing) byTime.set(point.t, point);
   for (const point of incoming) byTime.set(point.t, point);
-  return sortPoints([...byTime.values()]);
+  return capSeries(sortPoints([...byTime.values()]));
 }
 
 export function parseSeriesPayload(data: unknown): SeriesPayload {
   if (!data || typeof data !== 'object') throw new Error('Unexpected series response');
   const record = data as {
     cursor?: unknown;
+    after?: unknown;
     hrr?: { unit?: unknown; points?: unknown; design?: unknown };
     devices?: unknown;
-    series?: unknown;
+    devc?: unknown;
+    selected_devc?: unknown;
   };
-  const cursor = record.cursor;
+  const cursor = record.cursor ?? record.after;
   if (typeof cursor !== 'string' && typeof cursor !== 'number') {
     throw new Error('Unexpected series response');
   }
+  if (String(cursor).trim() === '') throw new Error('Unexpected series response');
   if (!record.hrr || typeof record.hrr !== 'object' || !('design' in record.hrr)) {
     throw new Error('Unexpected series response');
   }
@@ -118,7 +158,7 @@ export function parseSeriesPayload(data: unknown): SeriesPayload {
     throw new Error('Unexpected series response');
   }
   if (!Array.isArray(record.devices)) throw new Error('Unexpected series response');
-  if (!record.series || typeof record.series !== 'object' || Array.isArray(record.series)) {
+  if (record.devc != null && (typeof record.devc !== 'object' || Array.isArray(record.devc))) {
     throw new Error('Unexpected series response');
   }
 
@@ -136,9 +176,11 @@ export function parseSeriesPayload(data: unknown): SeriesPayload {
     });
   }
 
-  const series: Record<string, SeriesPoint[]> = {};
-  for (const [id, points] of Object.entries(record.series as Record<string, unknown>)) {
-    series[id] = parsePoints(points);
+  const selectedDevc = parseSelectedDevc(record);
+  const devc: Record<string, SeriesPoint[]> = {};
+  const rawDevc = (record.devc ?? {}) as Record<string, unknown>;
+  for (const id of selectedDevc) {
+    devc[id] = asPointList(rawDevc[id] ?? [], 'v');
   }
 
   const unit = typeof record.hrr.unit === 'string' && record.hrr.unit.trim() ? record.hrr.unit.trim() : 'kW';
@@ -146,11 +188,12 @@ export function parseSeriesPayload(data: unknown): SeriesPayload {
     cursor: String(cursor),
     hrr: {
       unit,
-      points: parsePoints(record.hrr.points),
-      design: record.hrr.design === null ? null : parsePoints(record.hrr.design),
+      points: asPointList(record.hrr.points, 'hrr'),
+      design: record.hrr.design === null ? null : asPointList(record.hrr.design, 'hrr'),
     },
     devices,
-    series,
+    devc,
+    selectedDevc,
   };
 }
 
@@ -158,21 +201,21 @@ export function applySeriesPayload(
   prev: SeriesView,
   payload: SeriesPayload,
   mode: 'append' | 'replace',
-  requestedIds?: string[],
 ): SeriesView {
-  const allowed = requestedIds ? new Set(requestedIds) : null;
-  const selected: Record<string, SeriesPoint[]> = mode === 'replace' ? {} : { ...prev.selected };
-  for (const [id, points] of Object.entries(payload.series)) {
-    if (allowed && !allowed.has(id)) continue;
-    selected[id] = mode === 'replace' ? sortPoints(points) : mergePoints(prev.selected[id] ?? [], points);
+  const devc: Record<string, SeriesPoint[]> = {};
+  for (const id of payload.selectedDevc) {
+    const incoming = payload.devc[id] ?? [];
+    devc[id] =
+      mode === 'replace' ? capSeries(incoming) : mergePoints(prev.devc[id] ?? [], incoming);
   }
   return {
     cursor: payload.cursor,
     hrrUnit: payload.hrr.unit || prev.hrrUnit,
-    hrr: mode === 'replace' ? sortPoints(payload.hrr.points) : mergePoints(prev.hrr, payload.hrr.points),
+    hrr: mode === 'replace' ? capSeries(payload.hrr.points) : mergePoints(prev.hrr, payload.hrr.points),
     design: payload.hrr.design === null ? null : sortPoints(payload.hrr.design),
     devices: payload.devices,
-    selected,
+    devc,
+    selectedDevc: payload.selectedDevc,
   };
 }
 

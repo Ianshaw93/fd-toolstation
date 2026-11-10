@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import LineChart, { type ChartSeries } from '../warehouse-smoke/LineChart';
-import { messageFrom, MODELLING_POLL_MS } from '../../lib/modelling-runs/client';
+import { messageFrom, MODELLING_POLL_MS, postJson } from '../../lib/modelling-runs/client';
 import {
   applySeriesPayload,
   deviceMatches,
   emptySeriesView,
+  parseSelectedDevc,
   parseSeriesPayload,
   seriesPath,
   type SeriesView,
@@ -22,20 +23,17 @@ export default function RunCharts({ runId }: { runId: string }) {
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let active = true;
     let cursor: string | null = null;
     let inFlight = false;
-    const requested = selectedId ? [selectedId] : [];
 
     async function tick(mode: 'replace' | 'append') {
       if (inFlight) return;
       inFlight = true;
-      const url = seriesPath(runId, {
-        since: mode === 'append' ? cursor : null,
-        devices: requested,
-      });
+      const url = seriesPath(runId, { after: mode === 'append' ? cursor : null });
       try {
         const res = await fetch(url, { cache: 'no-store' });
         const body = await res.json().catch(() => null);
@@ -43,7 +41,7 @@ export default function RunCharts({ runId }: { runId: string }) {
         const parsed = parseSeriesPayload(body);
         if (!active) return;
         cursor = parsed.cursor;
-        setView((prev) => applySeriesPayload(prev, parsed, mode, requested));
+        setView((prev) => applySeriesPayload(prev, parsed, mode));
         setError(null);
       } catch (err) {
         if (!active) return;
@@ -61,12 +59,30 @@ export default function RunCharts({ runId }: { runId: string }) {
     };
   }, [runId, selectedId]);
 
+  async function choose(id: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      const body = await postJson(`/api/cfd-dashboard/runs/${encodeURIComponent(runId)}/series`, {
+        selected_devc: [id],
+      });
+      const saved = parseSelectedDevc(body);
+      if (saved.length === 0) throw new Error('Device was not saved');
+      setSelectedId(saved[0]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Device was not saved');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const matches = useMemo(
     () => view.devices.filter((device) => deviceMatches(device, query)),
     [view.devices, query],
   );
-  const selected = view.devices.find((device) => device.id === selectedId) ?? null;
-  const selectedPoints = selectedId ? (view.selected[selectedId] ?? []) : [];
+  const chartedId = view.selectedDevc[0] ?? null;
+  const selected = view.devices.find((device) => device.id === chartedId) ?? null;
+  const selectedPoints = chartedId ? (view.devc[chartedId] ?? []) : [];
 
   const hrrData = useMemo(
     () => view.hrr.map((point) => ({ t: point.t, hrr: point.v })),
@@ -138,10 +154,11 @@ export default function RunCharts({ runId }: { runId: string }) {
               <button
                 type="button"
                 role="option"
-                aria-selected={device.id === selectedId}
-                onClick={() => setSelectedId(device.id)}
-                className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-gray-50 ${
-                  device.id === selectedId ? 'bg-blue-50' : ''
+                aria-selected={device.id === chartedId}
+                disabled={saving}
+                onClick={() => choose(device.id)}
+                className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:opacity-60 ${
+                  device.id === chartedId ? 'bg-blue-50' : ''
                 }`}
               >
                 <span className="font-medium text-gray-900">{device.id}</span>
@@ -170,7 +187,9 @@ export default function RunCharts({ runId }: { runId: string }) {
             />
           </div>
         ) : (
-          <p className="mt-3 text-sm text-gray-500">Select a device to plot it.</p>
+          <p className="mt-3 text-sm text-gray-500">
+            Select a device to plot it. The choice is saved for the runner, which then sends that column only.
+          </p>
         )}
       </div>
 

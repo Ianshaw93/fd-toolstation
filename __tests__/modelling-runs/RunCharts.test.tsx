@@ -39,9 +39,10 @@ const catalog = [
 
 function seriesBody(opts: {
   cursor: string;
-  hrr?: { t: number; v: number }[];
-  design?: { t: number; v: number }[] | null;
-  series?: Record<string, { t: number; v: number }[]>;
+  hrr?: { t: number; hrr: number }[];
+  design?: { t: number; hrr: number }[] | null;
+  devc?: Record<string, { t: number; v: number }[]>;
+  selectedDevc?: string[];
 }) {
   const extra: Record<string, { t: number; v: number }[]> = {};
   for (let i = 0; i < 300; i += 1) extra[`bulk_${i}`] = [{ t: 0, v: i }];
@@ -50,13 +51,14 @@ function seriesBody(opts: {
     hrr: {
       unit: 'kW',
       points: opts.hrr ?? [
-        { t: 0, v: 0 },
-        { t: 10, v: 120 },
+        { t: 0, hrr: 0 },
+        { t: 10, hrr: 120 },
       ],
-      design: opts.design === undefined ? [{ t: 0, v: 0 }, { t: 30, v: 400 }] : opts.design,
+      design: opts.design === undefined ? [{ t: 0, hrr: 0 }, { t: 30, hrr: 400 }] : opts.design,
     },
     devices: catalog,
-    series: { ...extra, ...(opts.series ?? {}) },
+    devc: { ...extra, ...(opts.devc ?? {}) },
+    selected_devc: opts.selectedDevc ?? [],
   };
 }
 
@@ -72,18 +74,23 @@ describe('run detail charts', () => {
   let fetchMock: jest.Mock;
 
   beforeEach(() => {
-    fetchMock = jest.fn(async (input: RequestInfo | URL) => {
+    let saved: string[] = [];
+    fetchMock = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.includes('/series') && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body ?? '{}')) as { selected_devc?: string[] };
+        saved = body.selected_devc ?? [];
+        return json({ selected_devc: saved });
+      }
       if (url.includes('/series')) {
-        const devices = new URL(url, 'http://localhost').searchParams.get('devices') ?? '';
-        const series: Record<string, { t: number; v: number }[]> = {};
-        for (const id of devices.split(',').filter(Boolean)) {
-          series[id] = [
+        const devc: Record<string, { t: number; v: number }[]> = {};
+        for (const id of saved) {
+          devc[id] = [
             { t: 0, v: 20 },
             { t: 10, v: 55 },
           ];
         }
-        return json(seriesBody({ cursor: '1', series }));
+        return json(seriesBody({ cursor: '1', devc, selectedDevc: saved }));
       }
       return json(detail);
     });
@@ -134,12 +141,17 @@ describe('run detail charts', () => {
     await user.click(screen.getByRole('option', { name: /P_lobby/ }));
 
     await waitFor(() => {
-      const seriesUrls = fetchMock.mock.calls
-        .map((call) => String(call[0]))
-        .filter((url) => url.includes('/series'));
-      const parsed = new URL(seriesUrls.at(-1) ?? '', 'http://localhost');
-      expect(parsed.searchParams.get('devices')).toBe('P_lobby');
-      expect(parsed.searchParams.get('since')).toBeNull();
+      const post = fetchMock.mock.calls.find(
+        (call) => call[1]?.method === 'POST' && String(call[0]).includes('/series'),
+      );
+      expect(JSON.parse(String(post?.[1].body))).toEqual({ selected_devc: ['P_lobby'] });
+      expect(JSON.stringify(post?.[1].headers ?? {})).not.toMatch(/X-API-Key|FDS_API_KEY/i);
+      const gets = fetchMock.mock.calls.filter(
+        (call) => !call[1]?.method && String(call[0]).includes('/series'),
+      );
+      const parsed = new URL(String(gets.at(-1)?.[0] ?? ''), 'http://localhost');
+      expect(parsed.searchParams.get('devices')).toBeNull();
+      expect(parsed.searchParams.get('after')).toBeNull();
     });
 
     const devc = await screen.findByRole('img', { name: /P_lobby/i });
@@ -160,23 +172,25 @@ describe('run detail charts', () => {
       seriesCalls += 1;
       const parsed = new URL(url, 'http://localhost');
       if (seriesCalls === 1) {
+        expect(parsed.searchParams.get('after')).toBeNull();
         expect(parsed.searchParams.get('since')).toBeNull();
         return json(
           seriesBody({
             cursor: '1',
             hrr: [
-              { t: 0, v: 0 },
-              { t: 10, v: 80 },
+              { t: 0, hrr: 0 },
+              { t: 10, hrr: 80 },
             ],
             design: null,
           }),
         );
       }
+      expect(parsed.searchParams.get('after')).toBe('1');
       expect(parsed.searchParams.get('since')).toBe('1');
       return json(
         seriesBody({
           cursor: '2',
-          hrr: [{ t: 20, v: 260 }],
+          hrr: [{ t: 20, hrr: 260 }],
           design: null,
         }),
       );
@@ -205,11 +219,11 @@ describe('run detail charts', () => {
           seriesBody({
             cursor: '9',
             hrr: [
-              { t: 0, v: 0 },
-              { t: 100, v: 400 },
-              { t: 200, v: 400 },
+              { t: 0, hrr: 0 },
+              { t: 100, hrr: 400 },
+              { t: 200, hrr: 400 },
             ],
-            design: [{ t: 0, v: 50 }, { t: 200, v: 500 }],
+            design: [{ t: 0, hrr: 50 }, { t: 200, hrr: 500 }],
           }),
         );
       }
