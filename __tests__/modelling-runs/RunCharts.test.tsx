@@ -2,7 +2,26 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import Plotly from 'plotly.js-dist-min';
 import RunDetailView from '../../components/modelling-runs/RunDetailView';
+
+type PlotTrace = {
+  name?: string;
+  x?: number[];
+  y?: number[];
+  type?: string;
+  mode?: string;
+  line?: { color?: string; dash?: string };
+};
+
+function plotCalls() {
+  return (Plotly.react as unknown as jest.Mock).mock.calls as [
+    HTMLElement,
+    PlotTrace[],
+    { font?: { family?: string } },
+    { responsive?: boolean; displaylogo?: boolean },
+  ][];
+}
 
 const RUN = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
@@ -95,6 +114,7 @@ describe('run detail charts', () => {
       return json(detail);
     });
     global.fetch = fetchMock as unknown as typeof fetch;
+    (Plotly.react as unknown as jest.Mock).mockClear();
   });
 
   it('draws hrr.design from the series GET when the points are {t, hrr}', async () => {
@@ -120,18 +140,32 @@ describe('run detail charts', () => {
 
     render(<RunDetailView runId={RUN} fromSearch={false} query="" user="" />);
 
-    const chart = await screen.findByRole('img', { name: /Heat release rate/i });
-    const paths = [...chart.querySelectorAll('path')];
-    const recorded = paths.find((path) => path.getAttribute('stroke')?.toLowerCase() === '#4798ea');
-    const design = paths.find((path) => path.getAttribute('stroke')?.toLowerCase() === '#e10600');
-    expect(recorded?.getAttribute('d')).toBe('M0.00,187.57 L186.00,176.75');
-    expect(recorded?.getAttribute('stroke-dasharray')).toBeFalsy();
-    expect(design?.getAttribute('d')).toBe('M0.00,191.18 L558.00,10.82');
-    expect(design?.getAttribute('stroke-dasharray')).toBe('2 4');
-    expect(screen.getByText('Design HRR')).toBeInTheDocument();
-    expect(screen.getByText('Recorded HRR')).toBeInTheDocument();
+    await screen.findByRole('img', { name: /Heat release rate/i });
+    await waitFor(() => {
+      const hrr = plotCalls().find((call) => call[1].some((trace) => trace.name === 'Recorded HRR'));
+      expect(hrr?.[1]).toEqual([
+        {
+          x: [0, 20],
+          y: [10, 40],
+          mode: 'lines',
+          type: 'scatter',
+          name: 'Recorded HRR',
+          line: { color: '#4798EA' },
+        },
+        {
+          x: [0, 60],
+          y: [0, 500],
+          mode: 'lines',
+          type: 'scatter',
+          name: 'Design HRR',
+          line: { color: '#E10600', dash: 'dash' },
+        },
+      ]);
+      expect(hrr?.[3]).toEqual({ responsive: true, displaylogo: false });
+      expect(hrr?.[2].font?.family).toBe('Arial, Helvetica, sans-serif');
+      expect(JSON.stringify(hrr?.[2])).not.toMatch(/Segoe UI/);
+    });
     expect(screen.getByText('2 HRR samples')).toBeInTheDocument();
-    expect(chart.innerHTML).not.toMatch(/Segoe UI/);
   });
 
   it('leaves the recorded HRR chart unchanged when hrr.design is null', async () => {
@@ -152,12 +186,15 @@ describe('run detail charts', () => {
       return json(detail);
     });
     render(<RunDetailView runId={RUN} fromSearch={false} query="" user="" />);
-    const chart = await screen.findByRole('img', { name: /Heat release rate/i });
-    const paths = [...chart.querySelectorAll('path')];
-    expect(paths).toHaveLength(1);
-    expect(paths[0].getAttribute('stroke')?.toLowerCase()).toBe('#4798ea');
-    expect(paths[0].getAttribute('stroke-dasharray')).toBeFalsy();
-    expect(paths[0].getAttribute('d')).toBe('M0.00,146.09 L558.00,10.82');
+    await screen.findByRole('img', { name: /Heat release rate/i });
+    await waitFor(() => {
+      const hrr = plotCalls()
+        .filter((call) => call[1].some((trace) => trace.name === 'Recorded HRR'))
+        .at(-1);
+      expect(hrr?.[1].map((trace) => trace.name)).toEqual(['Recorded HRR']);
+      expect(hrr?.[1][0]).toMatchObject({ x: [0, 20], y: [10, 40], line: { color: '#4798EA' } });
+      expect(hrr?.[1][0].line?.dash).toBeUndefined();
+    });
     expect(screen.queryByText('Design HRR')).not.toBeInTheDocument();
     expect(screen.getByText('2 HRR samples')).toBeInTheDocument();
   });
@@ -191,10 +228,23 @@ describe('run detail charts', () => {
       expect(parsed.searchParams.get('after')).toBeNull();
     });
 
-    const devc = await screen.findByRole('img', { name: /P_lobby/i });
-    expect(devc.querySelectorAll('path')).toHaveLength(1);
-    const hrr = screen.getByRole('img', { name: /Heat release rate/i });
-    expect(hrr.querySelectorAll('path').length).toBeLessThan(5);
+    await screen.findByRole('img', { name: /P_lobby/i });
+    await waitFor(() => {
+      const devc = plotCalls().find((call) => call[1].some((trace) => trace.name === 'PRESSURE'));
+      expect(devc?.[1]).toEqual([
+        {
+          x: [0, 10],
+          y: [20, 55],
+          mode: 'lines',
+          type: 'scatter',
+          name: 'PRESSURE',
+          line: { color: '#4798EA' },
+        },
+      ]);
+    });
+    const names = plotCalls().flatMap((call) => call[1].map((trace) => trace.name));
+    expect(names.filter((name) => name === 'PRESSURE')).toHaveLength(1);
+    expect(names.join(' ')).not.toMatch(/bulk_/);
     for (const call of fetchMock.mock.calls) {
       expect(String(call[0])).not.toMatch(/bulk_0/);
       expect(JSON.stringify(call[1] ?? {})).not.toMatch(/X-API-Key|FDS_API_KEY/i);
@@ -245,6 +295,13 @@ describe('run detail charts', () => {
       }
     });
     expect(await screen.findByText('3 HRR samples')).toBeInTheDocument();
+    await waitFor(() => {
+      const hrr = plotCalls()
+        .filter((call) => call[1].some((trace) => trace.name === 'Recorded HRR'))
+        .at(-1);
+      expect(hrr?.[1][0]).toMatchObject({ x: [0, 10, 20], y: [0, 80, 260] });
+      expect(hrr?.[1]).toHaveLength(1);
+    });
     spy.mockRestore();
   });
 
@@ -269,7 +326,15 @@ describe('run detail charts', () => {
 
     render(<RunDetailView runId={RUN} fromSearch={false} query="" user="" />);
     expect(await screen.findByText('3 HRR samples')).toBeInTheDocument();
-    expect(screen.getByText('Design HRR')).toBeInTheDocument();
+    await waitFor(() => {
+      const hrr = plotCalls().find((call) => call[1].some((trace) => trace.name === 'Design HRR'));
+      expect(hrr?.[1][1]).toMatchObject({
+        name: 'Design HRR',
+        x: [0, 200],
+        y: [50, 500],
+        line: { color: '#E10600', dash: 'dash' },
+      });
+    });
     expect(screen.getByRole('img', { name: /Heat release rate/i })).toBeInTheDocument();
     const seriesUrl = fetchMock.mock.calls.map((call) => String(call[0])).find((url) => url.includes('/series'));
     expect(seriesUrl).toContain(`/api/cfd-dashboard/runs/${RUN}/series`);
@@ -278,6 +343,10 @@ describe('run detail charts', () => {
   it('keeps chart code off Segoe UI', () => {
     const chart = readFileSync(join(__dirname, '../../components/modelling-runs/RunCharts.tsx'), 'utf8');
     const line = readFileSync(join(__dirname, '../../components/warehouse-smoke/LineChart.tsx'), 'utf8');
+    expect(chart).toMatch(/import\(['"]plotly\.js-dist-min['"]\)/);
+    expect(chart).not.toMatch(/import\(['"]plotly\.js['"]\)/);
+    expect(chart).not.toMatch(/from ['"]plotly\.js-dist['"]/);
+    expect(chart).not.toMatch(/react-plotly/);
     expect(chart).not.toMatch(/Segoe UI/);
     expect(line).not.toMatch(/Segoe UI/);
   });

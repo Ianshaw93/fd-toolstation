@@ -1,8 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import LineChart, { type ChartSeries } from '../warehouse-smoke/LineChart';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Data } from 'plotly.js';
 import { messageFrom, MODELLING_POLL_MS, postJson } from '../../lib/modelling-runs/client';
+import {
+  buildDevcTraces,
+  buildHrrTraces,
+  plotConfig,
+  timeSeriesLayout,
+} from '../../lib/modelling-runs/plotly-charts';
 import {
   applySeriesPayload,
   deviceMatches,
@@ -13,10 +19,43 @@ import {
   type SeriesView,
 } from '../../lib/modelling-runs/series';
 
-/** Mid blue from the CFD report charts. */
-const RECORDED_BLUE = '#4798EA';
-/** Dotted design curve, same role as the programmed HRR line. */
-const DESIGN_RED = '#E10600';
+function PlotlyPane({
+  label,
+  traces,
+  xLabel,
+  yLabel,
+}: {
+  label: string;
+  traces: Data[];
+  xLabel: string;
+  yLabel: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const layout = useMemo(() => timeSeriesLayout(xLabel, yLabel), [xLabel, yLabel]);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    let cancelled = false;
+    (async () => {
+      const Plotly = (await import('plotly.js-dist-min')).default;
+      if (cancelled || !ref.current) return;
+      await Plotly.react(ref.current, traces, layout, plotConfig);
+    })();
+    return () => {
+      cancelled = true;
+      void import('plotly.js-dist-min').then((mod) => {
+        mod.default.purge(node);
+      });
+    };
+  }, [traces, layout]);
+
+  return (
+    <figure role="img" aria-label={label} className="m-0">
+      <div ref={ref} className="h-72 w-full" />
+    </figure>
+  );
+}
 
 export default function RunCharts({ runId }: { runId: string }) {
   const [view, setView] = useState<SeriesView>(emptySeriesView());
@@ -84,28 +123,12 @@ export default function RunCharts({ runId }: { runId: string }) {
   const selected = view.devices.find((device) => device.id === chartedId) ?? null;
   const selectedPoints = chartedId ? (view.devc[chartedId] ?? []) : [];
 
-  const hrrData = useMemo(
-    () => view.hrr.map((point) => ({ t: point.t, hrr: point.v })),
-    [view.hrr],
+  const hrrTraces = useMemo(() => buildHrrTraces(view.hrr, view.design), [view.hrr, view.design]);
+  const devcTraces = useMemo(
+    () => (selected ? buildDevcTraces(selected.quantity, selectedPoints) : []),
+    [selected, selectedPoints],
   );
-  const hrrSeries = useMemo(() => {
-    const series: ChartSeries[] = [{ key: 'hrr', label: 'Recorded HRR', color: RECORDED_BLUE }];
-    if (view.design && view.design.length > 0) {
-      series.push({
-        key: 'design',
-        label: 'Design HRR',
-        color: DESIGN_RED,
-        dash: '2 4',
-        points: view.design.map((point) => ({ x: point.t, y: point.v })),
-      });
-    }
-    return series;
-  }, [view.design]);
-
-  const devcData = useMemo(
-    () => selectedPoints.map((point) => ({ t: point.t, v: point.v })),
-    [selectedPoints],
-  );
+  const devcYLabel = selected?.unit ? `${selected.quantity} (${selected.unit})` : (selected?.quantity ?? '');
 
   const ready = view.cursor !== null;
 
@@ -113,18 +136,12 @@ export default function RunCharts({ runId }: { runId: string }) {
     <section aria-label="Charts" className="mb-8 space-y-4">
       {ready ? (
         <div>
-          <LineChart
-            title="Heat release rate"
-            data={hrrData}
-            xKey="t"
-            series={hrrSeries}
+          <h3 className="text-sm font-semibold text-gray-900">Heat release rate</h3>
+          <PlotlyPane
+            label={`Heat release rate: ${view.hrrUnit} against Time (s)`}
+            traces={hrrTraces}
             xLabel="Time (s)"
             yLabel={view.hrrUnit}
-            yFromZero
-            xFromZero
-            strokeWidth={1.75}
-            decimals={1}
-            unit={` ${view.hrrUnit}`}
           />
           <p className="mt-2 text-sm text-gray-600">
             {view.hrr.length > 0 ? `${view.hrr.length} HRR samples` : 'No HRR samples yet'}
@@ -172,18 +189,12 @@ export default function RunCharts({ runId }: { runId: string }) {
         ) : null}
         {selected ? (
           <div className="mt-4">
-            <LineChart
-              title={selected.id}
-              data={devcData}
-              xKey="t"
-              series={[{ key: 'v', label: selected.quantity, color: RECORDED_BLUE }]}
+            <h3 className="text-sm font-semibold text-gray-900">{selected.id}</h3>
+            <PlotlyPane
+              label={`${selected.id}: ${devcYLabel} against Time (s)`}
+              traces={devcTraces}
               xLabel="Time (s)"
-              yLabel={selected.unit ? `${selected.quantity} (${selected.unit})` : selected.quantity}
-              yFromZero
-              xFromZero
-              strokeWidth={1.75}
-              decimals={1}
-              unit={selected.unit ? ` ${selected.unit}` : ''}
+              yLabel={devcYLabel}
             />
           </div>
         ) : (
