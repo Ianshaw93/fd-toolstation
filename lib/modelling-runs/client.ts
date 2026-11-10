@@ -10,6 +10,16 @@ export const MODELLING_POLL_MS = 10_000;
 /** Versioned so a later shape change does not reuse a bare name string. */
 export const ENGINEER_STORAGE_KEY = 'fd.modelling.engineer.v1';
 
+/** Same fields as the backend `q` filter: case name or input file, case-insensitive. */
+export function runMatchesSearch(run: ModellingRun, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  return (
+    (run.case_name || '').toLowerCase().includes(needle) ||
+    (run.input_file_ref || '').toLowerCase().includes(needle)
+  );
+}
+
 export function runsListPath(filters: RunFilters = {}): string {
   const params = new URLSearchParams();
   if (filters.target) params.set('target', filters.target);

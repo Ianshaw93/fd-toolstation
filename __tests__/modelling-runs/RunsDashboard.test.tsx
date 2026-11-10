@@ -199,6 +199,70 @@ describe('modelling runs dashboard', () => {
     });
   });
 
+  it('logs a search once when it is submitted or changed, and the 10s poll omits q', async () => {
+    const user = userEvent.setup();
+    const spy = jest.spyOn(window, 'setInterval');
+    render(<CfdDashboardPage />);
+    await screen.findByText('corridor-a');
+
+    function runsRequests() {
+      return fetchMock.mock.calls
+        .map((call) => String(call[0]))
+        .filter((url) => {
+          const path = new URL(url, 'http://localhost').pathname;
+          return path === '/api/cfd-dashboard/runs';
+        })
+        .map((url) => new URL(url, 'http://localhost'));
+    }
+
+    await user.type(screen.getByLabelText('Engineer'), 'ian');
+    await user.type(screen.getByRole('searchbox', { name: 'Search runs' }), 'corridor');
+    expect(runsRequests().some((url) => url.searchParams.has('q'))).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    await waitFor(() => {
+      const logged = runsRequests().filter((url) => url.searchParams.get('q') === 'corridor');
+      expect(logged).toHaveLength(1);
+      expect(logged[0].searchParams.get('user')).toBe('ian');
+    });
+    expect(screen.getByRole('link', { name: 'View corridor-a' })).toHaveAttribute(
+      'href',
+      `/cfd-dashboard/runs/${RUN}?from=search&q=corridor&user=ian`,
+    );
+
+    const polls = spy.mock.calls.filter((call) => call[1] === 10_000);
+    expect(polls.length).toBeGreaterThan(0);
+    await act(async () => {
+      for (const poll of polls) {
+        await (poll[0] as () => void | Promise<void>)();
+      }
+    });
+
+    expect(runsRequests().filter((url) => url.searchParams.get('q') === 'corridor')).toHaveLength(1);
+    const refreshed = runsRequests();
+    expect(refreshed.at(-1)?.searchParams.has('q')).toBe(false);
+
+    await user.clear(screen.getByRole('searchbox', { name: 'Search runs' }));
+    await user.type(screen.getByRole('searchbox', { name: 'Search runs' }), 'no-such-case');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    await waitFor(() => {
+      expect(runsRequests().filter((url) => url.searchParams.get('q') === 'no-such-case')).toHaveLength(1);
+    });
+    expect(runsRequests().filter((url) => url.searchParams.get('q') === 'corridor')).toHaveLength(1);
+    expect(screen.queryByText('corridor-a')).not.toBeInTheDocument();
+
+    await act(async () => {
+      for (const poll of polls) {
+        await (poll[0] as () => void | Promise<void>)();
+      }
+    });
+    expect(runsRequests().filter((url) => url.searchParams.has('q'))).toHaveLength(2);
+    expect(screen.queryByText('corridor-a')).not.toBeInTheDocument();
+    spy.mockRestore();
+  });
+
   it('polls the runs list about every 10s', async () => {
     const spy = jest.spyOn(window, 'setInterval');
     render(<CfdDashboardPage />);

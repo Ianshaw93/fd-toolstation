@@ -10,6 +10,7 @@ import {
   parseMachines,
   parseRuns,
   postJson,
+  runMatchesSearch,
   runsListPath,
   runViewHref,
 } from '../../lib/modelling-runs/client';
@@ -53,18 +54,27 @@ export default function ModellingRunsDashboard() {
     target,
     machine_id: machineId,
     status,
-    q: query,
-    user: query.trim() ? engineer : undefined,
   });
   const machinesPoll = usePolledJson('/api/cfd-dashboard/machines', parseMachines);
   const runsPoll = usePolledJson(runsUrl, parseRuns);
   const machines = machinesPoll.data ?? [];
-  const runs = runsPoll.data ?? [];
+  const runs = (runsPoll.data ?? []).filter((run) => runMatchesSearch(run, query));
   const startable = machines.filter((machine) => machine.target_type === 'local' || CLOUDHPC_ENABLED);
 
   function onSearch(event: FormEvent) {
     event.preventDefault();
-    setQuery(draftQuery.trim());
+    const next = draftQuery.trim();
+    setQuery(next);
+    if (!next) return;
+    // One request with q so the backend logs this search. The 10s poll omits q.
+    const url = runsListPath({
+      target,
+      machine_id: machineId,
+      status,
+      q: next,
+      user: engineer,
+    });
+    void fetch(url, { cache: 'no-store' }).catch(() => undefined);
   }
 
   async function onStart(event: FormEvent) {
