@@ -106,7 +106,7 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
       )}
 
       <CollapsibleSection title="Client Details" dense defaultOpen={true}>
-        <ClientDetailsSection client={state.client} dispatch={dispatch} showCompany />
+        <ClientDetailsSection client={state.client} dispatch={dispatch} showCompany contactSuggestions={state.contact_suggestions} />
       </CollapsibleSection>
       <CollapsibleSection title="Project Details" dense defaultOpen={true}>
         <ProjectDetailsSection project={state.project} dispatch={dispatch} />

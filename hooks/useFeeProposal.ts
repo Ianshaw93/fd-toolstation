@@ -17,6 +17,7 @@ import type {
 } from '../lib/fee-types';
 import { defaultServiceConfig } from '../lib/fee-constants';
 import { splitAddressLines } from '../lib/address-format';
+import { NO_CONTACT_SUGGESTIONS, readContactSuggestions, type ContactSuggestions } from '../lib/client-contact-suggestions';
 import { prefillNotice } from '../lib/directory-prefill';
 import {
   applyFeeProposalPrefill,
@@ -43,6 +44,10 @@ interface FeeProposalState {
    */
   engineer_source: 'empty' | 'account' | 'user';
   engineer_account: string | null;
+  /** The linked Client company's people, offered as name tags. Never applied without a click. */
+  contact_suggestions: ContactSuggestions;
+  /** The tag the user last clicked, so a project switch can clear those names if still unchanged. */
+  client_contact_pick: { contactId: number; firstName: string; lastName: string } | null;
 }
 
 export type FeeProposalSnapshot = FeeProposalState;
@@ -57,6 +62,7 @@ type Action =
   | { type: 'SET_DIRECTORY_NOTICE'; ref: string; notice: string }
   /** The signed-in account changed (null: signed out) and this fee-list engineer matches it, if any. */
   | { type: 'APPLY_ACCOUNT_ENGINEER'; accountKey: string | null; engineer: string | null }
+  | { type: 'PICK_CLIENT_CONTACT'; contactId: number }
   | { type: 'UNLINK_SYNERGY_PROJECT' }
   | { type: 'SET_FEE_OPTIONS'; field: keyof FeeOptions; value: string | number | boolean }
   | { type: 'SET_SERVICE_1_4'; key: ServiceKey1to4; field: keyof ServiceConfig; value: boolean | number | string | null }
@@ -81,6 +87,8 @@ function initialState(): FeeProposalState {
     client_role_notice: null,
     engineer_source: 'empty',
     engineer_account: null,
+    contact_suggestions: NO_CONTACT_SUGGESTIONS,
+    client_contact_pick: null,
     fee_options: { engineer_name: '', pii_limit: 100000, include_hourly_rates: false },
     design_stages_1_4: {
       stage_1: defaultServiceConfig(),
@@ -194,6 +202,11 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
 
     case 'LINK_DIRECTORY_PROJECT': {
       const { project } = action;
+      const pick = state.client_contact_pick;
+      if (pick && state.client.first_name === pick.firstName && state.client.surname === pick.lastName) {
+        state = { ...state, client: { ...state.client, first_name: '', surname: '' } };
+      }
+      state = { ...state, client_contact_pick: null, contact_suggestions: NO_CONTACT_SUGGESTIONS };
       // No prefill yet: values filled for the previous project go back to their defaults.
       const reset = applyFeeProposalPrefill({
         current: prefillTarget(state),
@@ -242,6 +255,17 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
       return {
         ...writePrefillTarget(state, merged.values, merged.applied),
         client_role_notice: notice || null,
+        contact_suggestions: readContactSuggestions(prefill),
+      };
+    }
+
+    case 'PICK_CLIENT_CONTACT': {
+      const person = state.contact_suggestions.people.find((candidate) => candidate.id === action.contactId);
+      if (!person) return state;
+      return {
+        ...state,
+        client: { ...state.client, first_name: person.firstName, surname: person.lastName },
+        client_contact_pick: { contactId: person.id, firstName: person.firstName, lastName: person.lastName },
       };
     }
 
@@ -270,6 +294,7 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         ...state,
         synergy_project_ref: null,
         client_role_notice: null,
+        contact_suggestions: NO_CONTACT_SUGGESTIONS,
         project: {
           ...state.project,
           synergy_project_id: undefined,
