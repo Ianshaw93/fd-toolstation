@@ -16,16 +16,13 @@ import type {
   ServiceKey6,
 } from '../lib/fee-types';
 import { defaultServiceConfig } from '../lib/fee-constants';
-import { applyDirectoryPrefill, type DirectoryPrefillResponse } from '../lib/directory-prefill';
+import { prefillNotice } from '../lib/directory-prefill';
 import {
   applyFeeProposalPrefill,
-  applySynergyEnrichment,
-  releaseSourcedValues,
-  type FeeAutofillMemory,
-  type FeeAutofillState,
+  type DirectoryProject,
   type FeeProposalPrefill,
-  type SynergyFeeEnrichment,
-} from '../lib/synergy-client-enrichment';
+  type PrefillTarget,
+} from '../lib/vendor/fd-directory-client';
 
 interface FeeProposalState {
   client: ClientDetails;
@@ -34,10 +31,10 @@ interface FeeProposalState {
   design_stages_1_4: DesignStagesRiba1to4;
   design_stages_5: DesignStagesRiba5;
   design_stages_6: DesignStagesRiba6;
-  synergy_link_generation: number;
+  /** Directory project id (`synergy:<org>:<project>`) of the linked project. */
   synergy_project_ref: string | null;
-  country_touched: boolean;
-  synergy_autofill: FeeAutofillMemory | null;
+  /** What the shared prefill merge last wrote, so it can tell those values from the user's. */
+  directory_applied: Partial<PrefillTarget>;
   client_role_notice: string | null;
 }
 
@@ -48,34 +45,8 @@ type Action =
   | { type: 'HYDRATE'; state: FeeProposalState }
   | { type: 'SET_CLIENT'; field: keyof ClientDetails; value: string | string[] }
   | { type: 'SET_PROJECT'; field: keyof ProjectDetails; value: string | boolean | number | undefined }
-  | {
-      type: 'LINK_SYNERGY_PROJECT';
-      synergy_project_id: number;
-      organisation_id: number;
-      label: string;
-      generation: number;
-      ref?: string;
-      project_name?: string | null;
-      project_location?: string | null;
-    }
-  | {
-      type: 'APPLY_SYNERGY_ENRICHMENT';
-      generation: number;
-      enrichment: SynergyFeeEnrichment;
-      engineer_names: string[];
-    }
-  | {
-      type: 'APPLY_FEE_PREFILL';
-      generation: number;
-      prefill: FeeProposalPrefill;
-      engineer_names: string[];
-    }
-  | {
-      type: 'APPLY_DIRECTORY_PREFILL';
-      response: DirectoryPrefillResponse;
-      engineer_names: string[];
-    }
-  | { type: 'SET_SYNERGY_NOTICE'; generation: number; notice: string }
+  | { type: 'LINK_DIRECTORY_PROJECT'; project: DirectoryProject }
+  | { type: 'APPLY_DIRECTORY_PREFILL'; prefill: FeeProposalPrefill }
   | { type: 'SET_DIRECTORY_NOTICE'; ref: string; notice: string }
   | { type: 'UNLINK_SYNERGY_PROJECT' }
   | { type: 'SET_FEE_OPTIONS'; field: keyof FeeOptions; value: string | number | boolean }
@@ -96,10 +67,8 @@ function initialState(): FeeProposalState {
   return {
     client: { first_name: '', surname: '', company_name: '', address_lines: ['', '', '', '', '', ''] },
     project: { project_name: '', project_location: '', country: 'EW', vat_applicable: true, legislation: '' },
-    synergy_link_generation: 0,
     synergy_project_ref: null,
-    country_touched: false,
-    synergy_autofill: null,
+    directory_applied: {},
     client_role_notice: null,
     fee_options: { engineer_name: '', pii_limit: 100000, include_hourly_rates: false },
     design_stages_1_4: {
@@ -134,54 +103,46 @@ function initialState(): FeeProposalState {
   };
 }
 
-function autofillSlice(state: FeeProposalState): FeeAutofillState {
+const PREFILL_DEFAULTS: PrefillTarget = {
+  projectName: '',
+  projectCountry: 'EW',
+  clientFirstName: '',
+  clientSurname: '',
+  clientCompanyName: '',
+  clientAddressLines: ['', '', '', '', '', ''],
+};
+
+function prefillTarget(state: FeeProposalState): PrefillTarget {
   return {
-    company_name: state.client.company_name ?? '',
-    first_name: state.client.first_name,
-    surname: state.client.surname,
-    address_lines: state.client.address_lines,
-    project_name: state.project.project_name,
-    project_location: state.project.project_location,
-    country: state.project.country,
-    country_touched: state.country_touched,
-    engineer_name: state.fee_options.engineer_name,
-    pii_limit: state.fee_options.pii_limit,
-    include_hourly_rates: state.fee_options.include_hourly_rates,
-    autofill: state.synergy_autofill,
-    notice: state.client_role_notice,
+    projectName: state.project.project_name,
+    projectCountry: state.project.country,
+    clientFirstName: state.client.first_name,
+    clientSurname: state.client.surname,
+    clientCompanyName: state.client.company_name ?? '',
+    clientAddressLines: state.client.address_lines,
   };
 }
 
-function writeAutofill(
-  state: FeeProposalState,
-  applied: FeeAutofillState & { notice: string | null },
-): FeeProposalState {
-  const countryChanged = applied.country !== state.project.country;
+function writePrefillTarget(state: FeeProposalState, values: PrefillTarget, applied: Partial<PrefillTarget>): FeeProposalState {
+  const country = values.projectCountry as CountryCode;
+  const countryChanged = country !== state.project.country;
   return {
     ...state,
     client: {
       ...state.client,
-      company_name: applied.company_name,
-      first_name: applied.first_name,
-      surname: applied.surname,
-      address_lines: applied.address_lines,
+      company_name: values.clientCompanyName,
+      first_name: values.clientFirstName,
+      surname: values.clientSurname,
+      address_lines: values.clientAddressLines,
     },
     project: {
       ...state.project,
-      project_name: applied.project_name,
-      project_location: applied.project_location,
-      country: applied.country,
-      vat_applicable: countryChanged ? applied.country === 'EW' : state.project.vat_applicable,
-      legislation: countryChanged && applied.country !== 'OTHER' ? '' : state.project.legislation,
+      project_name: values.projectName,
+      country,
+      vat_applicable: countryChanged ? country === 'EW' : state.project.vat_applicable,
+      legislation: countryChanged && country !== 'OTHER' ? '' : state.project.legislation,
     },
-    fee_options: {
-      ...state.fee_options,
-      engineer_name: applied.engineer_name,
-      pii_limit: applied.pii_limit,
-      include_hourly_rates: applied.include_hourly_rates,
-    },
-    synergy_autofill: applied.autofill,
-    client_role_notice: applied.notice,
+    directory_applied: applied,
   };
 }
 
@@ -202,88 +163,65 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         const legislation = country === 'OTHER' ? state.project.legislation : '';
         return {
           ...state,
-          country_touched: true,
           project: { ...state.project, country, vat_applicable, legislation },
         };
       }
       return { ...state, project: { ...state.project, [action.field]: action.value } };
     }
 
-    case 'LINK_SYNERGY_PROJECT': {
-      const absent = { value: null, status: 'absent' as const, source: null };
-      const applied = applyFeeProposalPrefill(releaseSourcedValues(autofillSlice(state)), {
-        company_name: absent,
-        first_name: absent,
-        surname: absent,
-        address_lines: absent,
-        project_name: action.project_name?.trim()
-          ? { value: action.project_name.trim(), status: 'present', source: 'project_name' }
-          : absent,
-        project_location: absent,
-        country: absent,
-        engineer_name: absent,
-        pii_limit: absent,
-        include_hourly_rates: absent,
-      }, []);
-      const written = writeAutofill(state, applied);
+    case 'LINK_DIRECTORY_PROJECT': {
+      const { project } = action;
+      // No prefill yet: values filled for the previous project go back to their defaults.
+      const reset = applyFeeProposalPrefill({
+        current: prefillTarget(state),
+        defaults: PREFILL_DEFAULTS,
+        prefill: null,
+        previouslyApplied: state.directory_applied,
+        selectedRef: project.id,
+      });
+      const values = { ...reset.values };
+      const applied = { ...reset.applied };
+      if (values.projectName === PREFILL_DEFAULTS.projectName && project.name) {
+        values.projectName = project.name;
+        applied.projectName = project.name;
+      }
+      const written = writePrefillTarget(state, values, applied);
       return {
         ...written,
-        synergy_link_generation: action.generation,
-        synergy_project_ref: action.ref ?? `synergy:${action.organisation_id}:${action.synergy_project_id}`,
+        synergy_project_ref: project.id,
+        client_role_notice: null,
         project: {
           ...written.project,
-          synergy_project_id: action.synergy_project_id,
-          organisation_id: action.organisation_id,
-          synergy_project_label: action.label,
+          synergy_project_id: project.synergyProjectId,
+          organisation_id: project.organisationId,
+          synergy_project_label: project.label,
         },
       };
     }
 
-    case 'APPLY_FEE_PREFILL': {
-      if (action.generation !== state.synergy_link_generation) return state;
-      const applied = applyFeeProposalPrefill(
-        autofillSlice(state),
-        action.prefill,
-        action.engineer_names,
-        { generation: action.generation, currentGeneration: state.synergy_link_generation },
-      );
-      return writeAutofill(state, applied);
-    }
-
-    case 'APPLY_SYNERGY_ENRICHMENT': {
-      if (action.generation !== state.synergy_link_generation) return state;
-      const applied = applySynergyEnrichment(
-        autofillSlice(state),
-        action.enrichment,
-        action.engineer_names,
-        { generation: action.generation, currentGeneration: state.synergy_link_generation },
-      );
-      return writeAutofill(state, applied);
-    }
-
     case 'APPLY_DIRECTORY_PREFILL': {
-      if (action.response.ref !== state.synergy_project_ref) return state;
-      const applied = applyDirectoryPrefill(
-        autofillSlice(state),
-        action.response,
-        state.synergy_project_ref,
-        action.engineer_names,
-      );
-      return writeAutofill(state, applied);
+      if (!state.synergy_project_ref || action.prefill.project.id !== state.synergy_project_ref) return state;
+      const merged = applyFeeProposalPrefill({
+        current: prefillTarget(state),
+        defaults: PREFILL_DEFAULTS,
+        prefill: action.prefill,
+        previouslyApplied: state.directory_applied,
+        selectedRef: state.synergy_project_ref,
+      });
+      return {
+        ...writePrefillTarget(state, merged.values, merged.applied),
+        client_role_notice: prefillNotice(action.prefill, merged.needsReview),
+      };
     }
 
     case 'SET_DIRECTORY_NOTICE':
       if (action.ref !== state.synergy_project_ref) return state;
       return { ...state, client_role_notice: action.notice };
 
-    case 'SET_SYNERGY_NOTICE':
-      if (action.generation !== state.synergy_link_generation) return state;
-      return { ...state, client_role_notice: action.notice };
-
     case 'UNLINK_SYNERGY_PROJECT':
+      // Values and directory_applied stay, so choosing another project replaces only what was filled.
       return {
         ...state,
-        synergy_link_generation: 0,
         synergy_project_ref: null,
         client_role_notice: null,
         project: {

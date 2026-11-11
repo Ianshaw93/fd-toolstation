@@ -13,12 +13,10 @@ import FeeOptionsSection from '../fee-proposal/FeeOptionsSection';
 import StageCards from './StageCards';
 import SynergyProjectPicker from './SynergyProjectPicker';
 import { SERVICE_LABELS_1_4, SERVICE_LABELS_5, SERVICE_LABELS_6 } from '../../lib/fee-constants';
-import {
-  CLIENT_LOOKUP_TIMEOUT_NOTICE,
-  pollFeeProposalPrefill,
-  type PollOutcome,
-} from '../../lib/directory-prefill';
-import { fetchFeeProposalPrefill, type SynergyProjectHit } from '../../lib/synergy-api';
+import { outcomeNotice, pollFeeProposalPrefill } from '../../lib/directory-prefill';
+import type { FdSignIn } from '../../lib/fd-msal';
+import { fetchFeeProposalPrefill } from '../../lib/synergy-api';
+import type { DirectoryProject } from '../../lib/vendor/fd-directory-client';
 
 // The fee proposal inside Word: the same form as the web tool, and Generate opens the
 // letter as a new Word document instead of downloading a file. The stage tables are
@@ -28,49 +26,29 @@ interface Props {
   inWord: boolean;
   busy: string | null;
   run: (label: string, fn: () => Promise<string | void>) => Promise<void>;
+  signIn?: FdSignIn;
 }
 
-export default function FeeProposalPane({ inWord, busy, run }: Props) {
+export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
   const { state, dispatch, totalFee, buildRequest } = useFeeProposal();
   const [engineers, setEngineers] = useState<Engineer[]>([]);
-  const linkGeneration = useRef(0);
   const lookup = useRef<AbortController | null>(null);
-  const engineersRef = useRef(engineers);
-
-  useEffect(() => {
-    engineersRef.current = engineers;
-  }, [engineers]);
 
   useEffect(() => {
     fetchEngineersViaProxy().then(setEngineers).catch(() => setEngineers([]));
     return () => lookup.current?.abort();
   }, []);
 
-  const linkProject = (hit: SynergyProjectHit) => {
+  const linkProject = (project: DirectoryProject) => {
     lookup.current?.abort();
     const controller = new AbortController();
     lookup.current = controller;
-    const ref = hit.ref;
-    dispatch({
-      type: 'LINK_SYNERGY_PROJECT',
-      synergy_project_id: hit.synergy_project_id,
-      organisation_id: hit.organisation_id,
-      label: hit.label,
-      generation: ++linkGeneration.current,
-      ref,
-      project_name: hit.name ?? null,
-      // The site address is not the client's address, so a hit location is not written.
-      project_location: null,
-    });
+    const ref = project.id;
+    dispatch({ type: 'LINK_DIRECTORY_PROJECT', project });
     void pollFeeProposalPrefill(ref, {
       fetchPrefill: fetchFeeProposalPrefill,
       signal: controller.signal,
-      onResponse: (response) =>
-        dispatch({
-          type: 'APPLY_DIRECTORY_PREFILL',
-          response,
-          engineer_names: engineersRef.current.map((engineer) => engineer.full_name),
-        }),
+      onResponse: (prefill) => dispatch({ type: 'APPLY_DIRECTORY_PREFILL', prefill }),
     }).then((outcome) => {
       const notice = outcomeNotice(outcome);
       if (notice && !controller.signal.aborted) dispatch({ type: 'SET_DIRECTORY_NOTICE', ref, notice });
@@ -103,9 +81,9 @@ export default function FeeProposalPane({ inWord, busy, run }: Props) {
   return (
     <div className="space-y-3">
       <SynergyProjectPicker
-        selectedId={state.project.synergy_project_id}
-        selectedOrgId={state.project.organisation_id}
+        selectedRef={state.synergy_project_ref}
         selectedLabel={state.project.synergy_project_label}
+        signIn={signIn}
         onSelect={linkProject}
         onUnlink={() => {
           lookup.current?.abort();
@@ -172,15 +150,3 @@ export default function FeeProposalPane({ inWord, busy, run }: Props) {
   );
 }
 
-function outcomeNotice(outcome: PollOutcome): string | null {
-  switch (outcome.kind) {
-    case 'timeout':
-      return CLIENT_LOOKUP_TIMEOUT_NOTICE;
-    case 'contract_mismatch':
-      return 'The project directory answered in a format this pane does not read. Fill in the client details by hand.';
-    case 'error':
-      return outcome.message;
-    default:
-      return null;
-  }
-}

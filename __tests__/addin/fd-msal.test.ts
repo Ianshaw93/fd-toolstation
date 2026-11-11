@@ -114,4 +114,23 @@ describe('FD Microsoft sign-in for the Word pane', () => {
     expect(result.state).toBe('unavailable');
     expect(result.reason).toMatch(/invalid_request/);
   });
+
+  it('only skips Microsoft sign-in for the browser fixture token outside production', async () => {
+    const previous = process.env.NODE_ENV;
+    (window as unknown as Record<string, unknown>).__FD_DIRECTORY_FIXTURE_TOKEN__ = fixtureAccessToken();
+    const createStandard = jest.fn(async () => fakeClient());
+    try {
+      (process.env as Record<string, string>).NODE_ENV = 'production';
+      const production = await startFdSignIn({ host: 'preview', nestedAppAuth: false, createNested: jest.fn(), createStandard });
+      expect(production.state).toBe('needs_sign_in');
+      expect(createStandard).toHaveBeenCalledTimes(1);
+      (process.env as Record<string, string>).NODE_ENV = 'development';
+      const fixture = await startFdSignIn({ host: 'preview', nestedAppAuth: false, createNested: jest.fn(), createStandard });
+      expect(fixture.state).toBe('signed_in');
+      expect(createStandard).toHaveBeenCalledTimes(1);
+    } finally {
+      (process.env as Record<string, string>).NODE_ENV = previous as string;
+      delete (window as unknown as Record<string, unknown>).__FD_DIRECTORY_FIXTURE_TOKEN__;
+    }
+  });
 });

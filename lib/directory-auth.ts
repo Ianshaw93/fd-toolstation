@@ -1,27 +1,16 @@
-// Delegated FD access token for the project directory API. The token comes from the
-// existing FD (MSAL) session through a provider registered by the host; this pane never
-// starts its own sign-in. With no provider, or a token that is not an access_as_user
-// access token for the directory API in the FD tenant, nothing is sent.
+// The directory access token for this pane. The provider is registered by lib/fd-msal.ts
+// from the FD Microsoft sign-in on the shared registration; with none registered nothing is
+// sent. Beyond the shared client's own guard, only an access_as_user access token for the
+// directory API in the FD tenant is returned: never an ID token or a Graph token.
 
-export const DIRECTORY_API_APP_ID = '2b180b8a-7cd3-40b2-83dd-8338103ce41e';
-export const DIRECTORY_API_SCOPE = `api://${DIRECTORY_API_APP_ID}/access_as_user`;
+import { DirectoryError, FD_SHARED_CLIENT_ID } from './vendor/fd-directory-client';
+
 export const FD_TENANT_ID = '8c535dde-8170-4909-8edc-40bbff4924ba';
 
-const ACCEPTED_AUDIENCES = new Set([`api://${DIRECTORY_API_APP_ID}`, DIRECTORY_API_APP_ID]);
+const ACCEPTED_AUDIENCES = new Set([`api://${FD_SHARED_CLIENT_ID}`, FD_SHARED_CLIENT_ID]);
+const GRAPH_AUDIENCES = new Set(['00000003-0000-0000-c000-000000000000', 'https://graph.microsoft.com']);
 
-export type DirectoryAccessTokenProvider = (scopes: string[]) => Promise<string>;
-
-export type DirectoryAuthErrorCode = 'sign_in_unavailable' | 'wrong_token';
-
-export class DirectoryAuthError extends Error {
-  readonly code: DirectoryAuthErrorCode;
-  readonly status = 401;
-
-  constructor(code: DirectoryAuthErrorCode, message: string) {
-    super(message);
-    this.code = code;
-  }
-}
+export type DirectoryAccessTokenProvider = () => Promise<string>;
 
 let registered: DirectoryAccessTokenProvider | null = null;
 
@@ -29,54 +18,42 @@ export function setDirectoryAccessTokenProvider(provider: DirectoryAccessTokenPr
   registered = provider;
 }
 
-function activeProvider(): DirectoryAccessTokenProvider | null {
-  if (registered) return registered;
-  // Browser fixture runs only. Next inlines NODE_ENV, so production bundles drop this.
-  if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
-    const token = (window as unknown as { __FD_DIRECTORY_FIXTURE_TOKEN__?: unknown }).__FD_DIRECTORY_FIXTURE_TOKEN__;
-    if (typeof token === 'string') return async () => token;
-  }
-  return null;
+/** Browser fixture runs only. Next inlines NODE_ENV, so production bundles drop this. */
+export function fixtureToken(): string | null {
+  if (process.env.NODE_ENV === 'production' || typeof window === 'undefined') return null;
+  const token = (window as unknown as { __FD_DIRECTORY_FIXTURE_TOKEN__?: unknown }).__FD_DIRECTORY_FIXTURE_TOKEN__;
+  return typeof token === 'string' ? token : null;
 }
 
-export type TokenCheck = { ok: true } | { ok: false; reason: string };
+function activeProvider(): DirectoryAccessTokenProvider | null {
+  if (registered) return registered;
+  const token = fixtureToken();
+  return token ? async () => token : null;
+}
+
+export type TokenCheck = { ok: true } | { ok: false; code: 'not_an_access_token' | 'wrong_audience' };
 
 export function checkDirectoryAccessToken(token: string): TokenCheck {
   const claims = decodeClaims(token);
-  if (!claims) return { ok: false, reason: 'not_a_jwt' };
-  if (typeof claims.aud !== 'string' || !ACCEPTED_AUDIENCES.has(claims.aud)) return { ok: false, reason: 'audience' };
-  if (claims.tid !== FD_TENANT_ID) return { ok: false, reason: 'tenant' };
+  if (!claims) return { ok: false, code: 'not_an_access_token' };
+  const aud = typeof claims.aud === 'string' ? claims.aud : '';
+  if (GRAPH_AUDIENCES.has(aud)) return { ok: false, code: 'wrong_audience' };
   const scopes = typeof claims.scp === 'string' ? claims.scp.split(' ') : [];
-  if (!scopes.includes('access_as_user')) return { ok: false, reason: 'scope' };
-  if (typeof claims.exp === 'number' && claims.exp * 1000 <= Date.now()) return { ok: false, reason: 'expired' };
+  if (!scopes.length) return { ok: false, code: 'not_an_access_token' };
+  if (!ACCEPTED_AUDIENCES.has(aud) || !scopes.includes('access_as_user')) return { ok: false, code: 'wrong_audience' };
+  if (claims.tid !== FD_TENANT_ID) return { ok: false, code: 'wrong_audience' };
+  if (typeof claims.exp === 'number' && claims.exp * 1000 <= Date.now()) return { ok: false, code: 'not_an_access_token' };
   return { ok: true };
 }
 
-/** `Bearer <token>` for the directory, or a DirectoryAuthError. Never prompts. */
-export async function directoryAuthorization(): Promise<string> {
+/** For createDirectoryClient's getAccessToken. Throws DirectoryError; never prompts. */
+export async function getDirectoryAccessToken(): Promise<string> {
   const provider = activeProvider();
-  if (!provider) {
-    throw new DirectoryAuthError(
-      'sign_in_unavailable',
-      'FD sign-in is not available in this pane. Fill in the project and client details by hand.',
-    );
-  }
-  let token: string;
-  try {
-    token = await provider([DIRECTORY_API_SCOPE]);
-  } catch {
-    throw new DirectoryAuthError(
-      'sign_in_unavailable',
-      'Sign in to your FD account to search the project directory. Client details stay as you typed them.',
-    );
-  }
-  if (!checkDirectoryAccessToken(token).ok) {
-    throw new DirectoryAuthError(
-      'wrong_token',
-      'The FD sign-in did not give a project directory token. Client details stay as you typed them.',
-    );
-  }
-  return `Bearer ${token}`;
+  if (!provider) throw new DirectoryError('interaction_required');
+  const token = await provider();
+  const check = checkDirectoryAccessToken(token);
+  if (!check.ok) throw new DirectoryError(check.code);
+  return token;
 }
 
 function decodeClaims(token: string): Record<string, unknown> | null {

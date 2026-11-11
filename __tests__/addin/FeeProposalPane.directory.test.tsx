@@ -30,8 +30,9 @@ describe('Word fee pane: choosing 0406 fills the Client-role company', () => {
 
   it('searches, selects, waits out the pending lookup, and fills company and address', async () => {
     const prefills = [pending0406(), served0406()];
-    const fetchMock = jest.fn(async (url: string, _init?: RequestInit) => {
-      const path = new URL(url).pathname;
+    const fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
+      void init;
+      const path = new URL(url, 'http://localhost').pathname;
       if (path === '/v1/projects') return json(searchPage([project0406()]));
       if (path === `/v1/projects/${encodeURIComponent(REF_0406)}/fee-proposal-prefill`) return json(prefills.shift());
       if (path.endsWith('/open')) return json(null, 204);
@@ -50,9 +51,9 @@ describe('Word fee pane: choosing 0406 fills the Client-role company', () => {
     expect(screen.getByDisplayValue('WD4 8LZ')).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent(/home address slot/i);
 
-    const directoryCalls = fetchMock.mock.calls.filter(([url]) => new URL(url).pathname.startsWith('/v1/'));
+    const directoryCalls = fetchMock.mock.calls.filter(([url]) => new URL(url, 'http://localhost').pathname.startsWith('/v1/'));
     expect(directoryCalls).toHaveLength(3);
-    expect(new URL(directoryCalls[0][0]).search).toBe('?q=0406&limit=20');
+    expect(new URL(directoryCalls[0][0], 'http://localhost').search).toBe('?q=0406&limit=20');
     for (const [, init] of directoryCalls) {
       const headers = init?.headers as Record<string, string>;
       expect(headers.authorization).toMatch(/^Bearer /);

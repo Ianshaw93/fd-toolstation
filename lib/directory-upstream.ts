@@ -1,10 +1,12 @@
-// Server-side calls to the shared project directory. The browser never receives a Synergy key.
-// Only the caller's own bearer token is forwarded; the directory checks it is a delegated
-// access_as_user token for the FD tenant and answers 401 (or 503 when not configured).
+// Server-side forwarding to the shared project directory API. Only the caller's own bearer
+// token is forwarded (no cookies, no Synergy key); the directory decides whether it is a
+// delegated access_as_user token for the FD tenant and answers 401 / 403 / 503 itself.
 
 import { NextResponse } from 'next/server';
 
 const DEFAULT_DIRECTORY_API_BASE = 'https://directory-api-production-7f250373.up.railway.app';
+
+const SEARCH_PARAMS = ['q', 'include', 'limit', 'offset'] as const;
 
 export function directoryApiBase(): string {
   return (process.env.DIRECTORY_API_BASE || DEFAULT_DIRECTORY_API_BASE).replace(/\/$/, '');
@@ -12,21 +14,25 @@ export function directoryApiBase(): string {
 
 export function callerAuthorization(header: string | null): string | null {
   const value = header?.trim() ?? '';
-  return /^Bearer [A-Za-z0-9\-_.~+/]+=*$/.test(value) ? value : null;
+  return /^Bearer [A-Za-z0-9\-_.~+/]+=*$/i.test(value) ? `Bearer ${value.slice(7)}` : null;
 }
 
-export function directorySearchUrl(query: string): string {
+export function directorySearchUrl(params: URLSearchParams): string {
+  const forwarded = new URLSearchParams();
+  for (const key of SEARCH_PARAMS) {
+    const value = params.get(key);
+    if (value !== null) forwarded.set(key, value);
+  }
+  const query = forwarded.toString();
   return `${directoryApiBase()}/v1/projects${query ? `?${query}` : ''}`;
 }
 
-/** `synergy:<organisation>:<project>` is the directory's project id. */
-export function directoryPrefillUrl(orgId: string, projectId: string): string | null {
-  if (!/^\d+$/.test(orgId) || !/^\d+$/.test(projectId)) return null;
-  return `${directoryApiBase()}/v1/projects/synergy:${orgId}:${projectId}/fee-proposal-prefill`;
+export function directoryPrefillUrl(id: string): string {
+  return `${directoryApiBase()}/v1/projects/${encodeURIComponent(id)}/fee-proposal-prefill`;
 }
 
 export function signInRequired(): NextResponse {
-  return NextResponse.json({ error: 'unauthorized', code: 'sign_in_required' }, { status: 401 });
+  return NextResponse.json({ error: 'unauthorized', code: 'missing_token' }, { status: 401 });
 }
 
 export async function forwardToDirectory(url: string, authorization: string): Promise<NextResponse> {
@@ -35,12 +41,16 @@ export async function forwardToDirectory(url: string, authorization: string): Pr
     upstream = await fetch(url, {
       headers: { Accept: 'application/json', Authorization: authorization },
       cache: 'no-store',
+      redirect: 'error',
     });
   } catch {
     return NextResponse.json({ error: 'directory_unreachable' }, { status: 502 });
   }
   return new NextResponse(await upstream.text(), {
     status: upstream.status,
-    headers: { 'Content-Type': upstream.headers.get('content-type') ?? 'application/json' },
+    headers: {
+      'Content-Type': upstream.headers.get('content-type') ?? 'application/json',
+      'Cache-Control': 'private, no-store',
+    },
   });
 }

@@ -27,7 +27,7 @@ describe('SynergyProjectPicker', () => {
     await new Promise((r) => setTimeout(r, 400));
     expect(search).not.toHaveBeenCalled();
     await userEvent.type(screen.getByPlaceholderText(/Search by job # or name/i), '4');
-    await waitFor(() => expect(search).toHaveBeenCalledWith('04', { includeInactive: false }));
+    await waitFor(() => expect(search).toHaveBeenCalledWith('04', expect.objectContaining({ includeInactive: false })));
   });
 
   it('shows each label verbatim and passes the include toggle', async () => {
@@ -36,7 +36,7 @@ describe('SynergyProjectPicker', () => {
     await userEvent.click(screen.getByLabelText(/Include inactive \/ archived/i));
     await userEvent.type(screen.getByPlaceholderText(/Search by job # or name/i), '0406');
     expect(await screen.findByText(LABEL_0406)).toBeInTheDocument();
-    expect(search).toHaveBeenLastCalledWith('0406', { includeInactive: true });
+    expect(search).toHaveBeenLastCalledWith('0406', expect.objectContaining({ includeInactive: true }));
   });
 
   it('marks inactive, archived and missing projects instead of hiding them', async () => {
