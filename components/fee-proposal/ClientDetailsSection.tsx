@@ -6,11 +6,27 @@ import type { ClientDetails } from '../../lib/fee-types';
 interface Props {
   client: ClientDetails;
   dispatch: Dispatch<any>;
+  /** Word task pane only. The web form leaves this off. */
+  showCompany?: boolean;
 }
 
-export default function ClientDetailsSection({ client, dispatch }: Props) {
+export default function ClientDetailsSection({ client, dispatch, showCompany = false }: Props) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {showCompany && (
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+          <input
+            type="text"
+            value={client.company_name ?? ''}
+            onChange={(e) => dispatch({ type: 'SET_CLIENT', field: 'company_name', value: e.target.value })}
+            className="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            The letter says Dear {'{first name}'}. The company is not that name.
+          </p>
+        </div>
+      )}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
         <input

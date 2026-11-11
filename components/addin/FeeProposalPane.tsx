@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useFeeProposal } from '../../hooks/useFeeProposal';
 import type { Engineer } from '../../lib/fee-types';
@@ -13,6 +13,8 @@ import FeeOptionsSection from '../fee-proposal/FeeOptionsSection';
 import StageCards from './StageCards';
 import SynergyProjectPicker from './SynergyProjectPicker';
 import { SERVICE_LABELS_1_4, SERVICE_LABELS_5, SERVICE_LABELS_6 } from '../../lib/fee-constants';
+import { CLIENT_ROLE_SOURCE_NOTICE, parseFeeEnrichment } from '../../lib/synergy-client-enrichment';
+import { fetchProjectEnrichment } from '../../lib/synergy-api';
 
 // The fee proposal inside Word: the same form as the web tool, and Generate opens the
 // letter as a new Word document instead of downloading a file. The stage tables are
@@ -27,6 +29,9 @@ interface Props {
 export default function FeeProposalPane({ inWord, busy, run }: Props) {
   const { state, dispatch, totalFee, buildRequest } = useFeeProposal();
   const [engineers, setEngineers] = useState<Engineer[]>([]);
+  const linkGeneration = useRef(0);
+  const engineersRef = useRef(engineers);
+  engineersRef.current = engineers;
 
   useEffect(() => {
     fetchEngineersViaProxy().then(setEngineers).catch(() => setEngineers([]));
@@ -62,24 +67,45 @@ export default function FeeProposalPane({ inWord, busy, run }: Props) {
         selectedOrgId={state.project.organisation_id}
         selectedLabel={state.project.synergy_project_label}
         onSelect={(hit) => {
+          const generation = ++linkGeneration.current;
           dispatch({
             type: 'LINK_SYNERGY_PROJECT',
             synergy_project_id: hit.synergy_project_id,
             organisation_id: hit.organisation_id,
             label: hit.label,
-            inferred_name: hit.name ?? undefined,
-            inferred_location: hit.location ?? undefined,
-            inferred_client: hit.client_name ?? undefined,
-            inferred_manager: hit.manager ?? undefined,
+            generation,
+            project_name: hit.name ?? null,
+            // Search hits do not carry a Client-role address. The checked
+            // project site was empty, so a hit location is not written here.
+            project_location: null,
           });
+          void fetchProjectEnrichment(hit.organisation_id, hit.synergy_project_id)
+            .then((body) => {
+              if (linkGeneration.current !== generation) return;
+              const parsed = parseFeeEnrichment(body);
+              if (!parsed.ok) return;
+              dispatch({
+                type: 'APPLY_SYNERGY_ENRICHMENT',
+                generation,
+                enrichment: parsed.enrichment,
+                engineer_names: engineersRef.current.map((engineer) => engineer.full_name),
+              });
+            })
+            .catch(() => {
+              if (linkGeneration.current !== generation) return;
+              dispatch({ type: 'SET_SYNERGY_NOTICE', generation, notice: CLIENT_ROLE_SOURCE_NOTICE });
+            });
         }}
         onUnlink={() => {
           dispatch({ type: 'UNLINK_SYNERGY_PROJECT' });
         }}
       />
+      {state.client_role_notice && (
+        <p className="text-xs text-gray-600" role="status">{state.client_role_notice}</p>
+      )}
 
       <CollapsibleSection title="Client Details" dense defaultOpen={true}>
-        <ClientDetailsSection client={state.client} dispatch={dispatch} />
+        <ClientDetailsSection client={state.client} dispatch={dispatch} showCompany />
       </CollapsibleSection>
       <CollapsibleSection title="Project Details" dense defaultOpen={true}>
         <ProjectDetailsSection project={state.project} dispatch={dispatch} />

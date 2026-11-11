@@ -64,6 +64,19 @@ export async function searchSynergyProjects(
  * Logs when a signed-in user selects/opens a Synergy directory row.
  * Returns 204 No Content. Does not create or mutate anything in Synergy.
  */
+export async function fetchProjectEnrichment(orgId: number, projectId: number): Promise<unknown> {
+  const res = await fetch(`/synergy/projects/${orgId}/${projectId}/enrichment`, {
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const error = new Error(err.message || `Client role was not loaded (${res.status})`) as Error & { status?: number };
+    error.status = res.status;
+    throw error;
+  }
+  return res.json();
+}
+
 export async function logSynergyProjectOpen(
   orgId: number,
   projectId: number,

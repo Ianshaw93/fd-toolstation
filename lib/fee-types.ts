@@ -23,6 +23,8 @@ export interface ClientDetails {
   first_name: string;
   surname: string;
   address_lines: string[];
+  /** Company assigned the Client role. Not the salutation name. */
+  company_name?: string;
 }
 
 export type CountryCode = 'EW' | 'J' | 'OTHER';

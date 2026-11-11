@@ -16,6 +16,13 @@ import type {
   ServiceKey6,
 } from '../lib/fee-types';
 import { defaultServiceConfig } from '../lib/fee-constants';
+import {
+  applyMissingClientSource,
+  applySynergyEnrichment,
+  type FeeAutofillMemory,
+  type FeeAutofillState,
+  type SynergyFeeEnrichment,
+} from '../lib/synergy-client-enrichment';
 
 interface FeeProposalState {
   client: ClientDetails;
@@ -24,6 +31,10 @@ interface FeeProposalState {
   design_stages_1_4: DesignStagesRiba1to4;
   design_stages_5: DesignStagesRiba5;
   design_stages_6: DesignStagesRiba6;
+  synergy_link_generation: number;
+  country_touched: boolean;
+  synergy_autofill: FeeAutofillMemory | null;
+  client_role_notice: string | null;
 }
 
 export type FeeProposalSnapshot = FeeProposalState;
@@ -38,11 +49,17 @@ type Action =
       synergy_project_id: number;
       organisation_id: number;
       label: string;
-      inferred_name?: string | null;
-      inferred_location?: string | null;
-      inferred_client?: string | null;
-      inferred_manager?: string | null;
+      generation: number;
+      project_name?: string | null;
+      project_location?: string | null;
     }
+  | {
+      type: 'APPLY_SYNERGY_ENRICHMENT';
+      generation: number;
+      enrichment: SynergyFeeEnrichment;
+      engineer_names: string[];
+    }
+  | { type: 'SET_SYNERGY_NOTICE'; generation: number; notice: string }
   | { type: 'UNLINK_SYNERGY_PROJECT' }
   | { type: 'SET_FEE_OPTIONS'; field: keyof FeeOptions; value: string | number | boolean }
   | { type: 'SET_SERVICE_1_4'; key: ServiceKey1to4; field: keyof ServiceConfig; value: boolean | number | string | null }
@@ -60,8 +77,12 @@ const DESIGN_STAGE_KEYS: ServiceKey1to4[] = [
 
 function initialState(): FeeProposalState {
   return {
-    client: { first_name: '', surname: '', address_lines: ['', '', '', '', '', ''] },
+    client: { first_name: '', surname: '', company_name: '', address_lines: ['', '', '', '', '', ''] },
     project: { project_name: '', project_location: '', country: 'EW', vat_applicable: true, legislation: '' },
+    synergy_link_generation: 0,
+    country_touched: false,
+    synergy_autofill: null,
+    client_role_notice: null,
     fee_options: { engineer_name: '', pii_limit: 100000, include_hourly_rates: false },
     design_stages_1_4: {
       stage_1: defaultServiceConfig(),
@@ -95,6 +116,57 @@ function initialState(): FeeProposalState {
   };
 }
 
+function autofillSlice(state: FeeProposalState): FeeAutofillState {
+  return {
+    company_name: state.client.company_name ?? '',
+    first_name: state.client.first_name,
+    surname: state.client.surname,
+    address_lines: state.client.address_lines,
+    project_name: state.project.project_name,
+    project_location: state.project.project_location,
+    country: state.project.country,
+    country_touched: state.country_touched,
+    engineer_name: state.fee_options.engineer_name,
+    pii_limit: state.fee_options.pii_limit,
+    include_hourly_rates: state.fee_options.include_hourly_rates,
+    autofill: state.synergy_autofill,
+    notice: state.client_role_notice,
+  };
+}
+
+function writeAutofill(
+  state: FeeProposalState,
+  applied: FeeAutofillState & { notice: string | null },
+): FeeProposalState {
+  const countryChanged = applied.country !== state.project.country;
+  return {
+    ...state,
+    client: {
+      ...state.client,
+      company_name: applied.company_name,
+      first_name: applied.first_name,
+      surname: applied.surname,
+      address_lines: applied.address_lines,
+    },
+    project: {
+      ...state.project,
+      project_name: applied.project_name,
+      project_location: applied.project_location,
+      country: applied.country,
+      vat_applicable: countryChanged ? applied.country === 'EW' : state.project.vat_applicable,
+      legislation: countryChanged && applied.country !== 'OTHER' ? '' : state.project.legislation,
+    },
+    fee_options: {
+      ...state.fee_options,
+      engineer_name: applied.engineer_name,
+      pii_limit: applied.pii_limit,
+      include_hourly_rates: applied.include_hourly_rates,
+    },
+    synergy_autofill: applied.autofill,
+    client_role_notice: applied.notice,
+  };
+}
+
 function reducer(state: FeeProposalState, action: Action): FeeProposalState {
   switch (action.type) {
     case 'HYDRATE':
@@ -110,47 +182,54 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         // 'Other' the user states them, starting from no VAT.
         const vat_applicable = country === 'EW';
         const legislation = country === 'OTHER' ? state.project.legislation : '';
-        return { ...state, project: { ...state.project, country, vat_applicable, legislation } };
+        return {
+          ...state,
+          country_touched: true,
+          project: { ...state.project, country, vat_applicable, legislation },
+        };
       }
       return { ...state, project: { ...state.project, [action.field]: action.value } };
     }
 
     case 'LINK_SYNERGY_PROJECT': {
-      // If fields are empty, infer them from directory details; otherwise leave them intact (no silent remap).
-      const shouldFillName = !state.project.project_name.trim() && action.inferred_name;
-      const shouldFillLocation = !state.project.project_location.trim() && action.inferred_location;
-
-      let newClient = { ...state.client };
-      if (action.inferred_client && !state.client.first_name.trim() && !state.client.surname.trim()) {
-        const parts = action.inferred_client.trim().split(/\s+/);
-        const firstName = parts[0] || '';
-        const surname = parts.slice(1).join(' ') || '';
-        newClient = { ...newClient, first_name: firstName, surname };
-      }
-
-      let newFeeOptions = { ...state.fee_options };
-      if (action.inferred_manager && !state.fee_options.engineer_name.trim()) {
-        newFeeOptions = { ...newFeeOptions, engineer_name: action.inferred_manager };
-      }
-
+      const applied = applyMissingClientSource(autofillSlice(state), {
+        project_name: action.project_name ?? null,
+        project_location: action.project_location ?? null,
+      });
+      const written = writeAutofill(state, applied);
       return {
-        ...state,
-        client: newClient,
-        fee_options: newFeeOptions,
+        ...written,
+        synergy_link_generation: action.generation,
         project: {
-          ...state.project,
+          ...written.project,
           synergy_project_id: action.synergy_project_id,
           organisation_id: action.organisation_id,
           synergy_project_label: action.label,
-          project_name: shouldFillName ? action.inferred_name!.trim() : state.project.project_name,
-          project_location: shouldFillLocation ? action.inferred_location!.trim() : state.project.project_location,
         },
       };
     }
 
+    case 'APPLY_SYNERGY_ENRICHMENT': {
+      if (action.generation !== state.synergy_link_generation) return state;
+      const applied = applySynergyEnrichment(
+        autofillSlice(state),
+        action.enrichment,
+        action.engineer_names,
+        { generation: action.generation, currentGeneration: state.synergy_link_generation },
+      );
+      return writeAutofill(state, applied);
+    }
+
+    case 'SET_SYNERGY_NOTICE':
+      if (action.generation !== state.synergy_link_generation) return state;
+      return { ...state, client_role_notice: action.notice };
+
     case 'UNLINK_SYNERGY_PROJECT':
       return {
         ...state,
+        synergy_link_generation: 0,
+        synergy_autofill: null,
+        client_role_notice: null,
         project: {
           ...state.project,
           synergy_project_id: undefined,
@@ -302,6 +381,7 @@ export function useFeeProposal() {
   const buildRequest = (): FeeProposalRequest => ({
     client: {
       ...state.client,
+      company_name: state.client.company_name ?? '',
       address_lines: state.client.address_lines.filter((l) => l.trim() !== ''),
     },
     project: state.project,
