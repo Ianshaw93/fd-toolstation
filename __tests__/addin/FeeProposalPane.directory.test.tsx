@@ -157,4 +157,37 @@ describe('Word fee pane: choosing 0406 fills the Client-role company', () => {
     expect(screen.queryByRole('group', { name: /company contacts/ })).toBeNull();
     expect(screen.getByLabelText('First Name')).toHaveValue('');
   });
+
+  it('labels each filled field in words and switches to "Edited by you" after a manual change', async () => {
+    const prefills = [pending0406(), served0406WithContacts()];
+    global.fetch = jest.fn(async (url: string) => {
+      const path = new URL(url, 'http://localhost').pathname;
+      if (path === '/v1/projects') return json(searchPage([project0406()]));
+      if (path.endsWith('/fee-proposal-prefill')) return json(prefills.shift() ?? served0406WithContacts());
+      return json(null, 204);
+    }) as unknown as typeof fetch;
+    setDirectoryAccessTokenProvider(async () => fixtureAccessToken());
+
+    render(<FeeProposalPane inWord={false} busy={null} run={jest.fn()} signIn={signedIn} />);
+    expect(await screen.findByTestId('source-engineer')).toHaveTextContent('From Microsoft sign-in');
+    await userEvent.type(screen.getByPlaceholderText(/Search by job # or name/i), '0406');
+    await userEvent.click(await screen.findByText(LABEL_0406));
+    expect(await screen.findByTestId('source-company', {}, { timeout: 5000 })).toHaveTextContent('From Total Synergy');
+    expect(screen.getByTestId('source-address')).toHaveTextContent(/From Total Synergy.*check/i);
+    expect(screen.getByTestId('address-review')).toHaveTextContent(/home address slot/i);
+    expect(screen.getByTestId('source-project-name')).toHaveTextContent('From Total Synergy');
+    expect(screen.queryByTestId('source-names')).toBeNull();
+    expect(screen.queryByTestId('source-country')).toBeNull();
+    expect(screen.getByTestId('autofill-announcement')).toHaveTextContent('Filled from Total Synergy: company, address (check it), project name.');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Louie Sharp' }));
+    expect(screen.getByTestId('source-names')).toHaveTextContent('Selected company contact');
+
+    const company = screen.getByDisplayValue('Taylor Wimpey North Thames');
+    await userEvent.type(company, ' Ltd');
+    expect(screen.getByTestId('source-company')).toHaveTextContent('Edited by you');
+    expect(screen.getByTestId('source-company')).toHaveTextContent(/was from Total Synergy/i);
+    await userEvent.selectOptions(screen.getByDisplayValue('Sam Bennett'), 'Kirsty Cameron');
+    expect(screen.getByTestId('source-engineer')).toHaveTextContent('Edited by you');
+  }, 10000);
 });
