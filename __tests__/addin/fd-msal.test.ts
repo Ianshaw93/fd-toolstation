@@ -4,6 +4,7 @@ import { FD_DIRECTORY_SCOPE } from '../../lib/vendor/fd-directory-client';
 import { fixtureAccessToken } from '../../test-fixtures/directory-contract-v1';
 
 const ACCOUNT = { homeAccountId: 'h', username: 'ian@firedynamicsgroup.com' };
+const NAMED = { homeAccountId: 'n', username: 'sam@firedynamicsgroup.com', name: 'Sam Bennett' };
 
 function interactionRequired() {
   return Object.assign(new Error('interaction_required'), { name: 'InteractionRequiredAuthError', errorCode: 'interaction_required' });
@@ -53,6 +54,7 @@ describe('FD Microsoft sign-in for the Word pane', () => {
     const result = await startFdSignIn({ host: 'word', nestedAppAuth: true, createNested, createStandard: jest.fn() });
     expect(createNested).toHaveBeenCalled();
     expect(result.state).toBe('signed_in');
+    expect(result.account).toEqual({ key: 'h', username: 'ian@firedynamicsgroup.com', name: null });
     expect(client.calls.silent[0]).toMatchObject({ scopes: [FD_DIRECTORY_SCOPE] });
     expect(client.calls.popup).toHaveLength(0);
     await expect(getDirectoryAccessToken()).resolves.not.toBe('id-token-not-used');
@@ -87,9 +89,10 @@ describe('FD Microsoft sign-in for the Word pane', () => {
   });
 
   it('in the browser preview, reuses an account already in this session', async () => {
-    const client = fakeClient({ getAllAccounts: () => [ACCOUNT as never] });
+    const client = fakeClient({ getAllAccounts: () => [NAMED as never] });
     const result = await startFdSignIn({ host: 'preview', nestedAppAuth: false, createNested: jest.fn(), createStandard: async () => client });
     expect(result.state).toBe('signed_in');
+    expect(result.account).toEqual({ key: 'n', username: 'sam@firedynamicsgroup.com', name: 'Sam Bennett' });
     expect(client.calls.redirect).toHaveLength(0);
   });
 
@@ -97,6 +100,7 @@ describe('FD Microsoft sign-in for the Word pane', () => {
     const client = fakeClient();
     const result = await startFdSignIn({ host: 'preview', nestedAppAuth: false, createNested: jest.fn(), createStandard: async () => client });
     expect(result.state).toBe('needs_sign_in');
+    expect(result.account).toBeNull();
     expect(client.calls.redirect).toHaveLength(0);
     await result.signIn();
     expect(client.calls.redirect[0]).toMatchObject({ scopes: [FD_DIRECTORY_SCOPE] });
@@ -127,10 +131,18 @@ describe('FD Microsoft sign-in for the Word pane', () => {
       (process.env as Record<string, string>).NODE_ENV = 'development';
       const fixture = await startFdSignIn({ host: 'preview', nestedAppAuth: false, createNested: jest.fn(), createStandard });
       expect(fixture.state).toBe('signed_in');
+      expect(fixture.account).toBeNull();
+      (window as unknown as Record<string, unknown>).__FD_DIRECTORY_FIXTURE_ACCOUNT__ = { username: 'sam@firedynamicsgroup.com', name: 'Sam Bennett' };
+      const named = await startFdSignIn({ host: 'preview', nestedAppAuth: false, createNested: jest.fn(), createStandard });
+      expect(named.account).toEqual({ key: 'fixture', username: 'sam@firedynamicsgroup.com', name: 'Sam Bennett' });
+      (process.env as Record<string, string>).NODE_ENV = 'production';
+      const productionNamed = await startFdSignIn({ host: 'preview', nestedAppAuth: false, createNested: jest.fn(), createStandard });
+      expect(productionNamed.account).toBeNull();
       expect(createStandard).toHaveBeenCalledTimes(1);
     } finally {
       (process.env as Record<string, string>).NODE_ENV = previous as string;
       delete (window as unknown as Record<string, unknown>).__FD_DIRECTORY_FIXTURE_TOKEN__;
+      delete (window as unknown as Record<string, unknown>).__FD_DIRECTORY_FIXTURE_ACCOUNT__;
     }
   });
 });

@@ -5,7 +5,10 @@ import { setDirectoryAccessTokenProvider } from '../../lib/directory-auth';
 import { fixtureAccessToken, LABEL_0406, pending0406, project0406, REF_0406, searchPage, served0406 } from '../../test-fixtures/directory-contract-v1';
 
 jest.mock('../../lib/word-addin-api', () => ({
-  fetchEngineersViaProxy: jest.fn().mockResolvedValue([{ full_name: 'Sam Bennett' }]),
+  fetchEngineersViaProxy: jest.fn().mockResolvedValue([
+    { full_name: 'Sam Bennett', email_prefix: 'sam', phone_number: '', job_title: '' },
+    { full_name: 'Kirsty Cameron', email_prefix: 'kirsty', phone_number: '', job_title: '' },
+  ]),
   renderFeeProposal: jest.fn(),
 }));
 
@@ -19,7 +22,8 @@ function json(body: unknown, status = 200) {
   };
 }
 
-const signedIn = { state: 'signed_in' as const, reason: null, signIn: jest.fn() };
+const SAM = { key: 'acct-sam', username: 'sam@firedynamicsgroup.com', name: 'Sam Bennett' };
+const signedIn = { state: 'signed_in' as const, reason: null, account: SAM, signIn: jest.fn() };
 
 describe('Word fee pane: choosing 0406 fills the Client-role company', () => {
   const previous = global.fetch;
@@ -47,8 +51,9 @@ describe('Word fee pane: choosing 0406 fills the Client-role company', () => {
 
     expect(await screen.findByRole('status')).toHaveTextContent(/looking up/i);
     expect(await screen.findByDisplayValue('Taylor Wimpey North Thames', {}, { timeout: 5000 })).toBeInTheDocument();
-    expect(screen.getByDisplayValue('The Dock,')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('WD4 8LZ')).toBeInTheDocument();
+    for (const line of ['The Dock', 'Station road', 'Kings Langley', 'Hertfordshire', 'WD4 8LZ', 'United Kingdom']) {
+      expect(screen.getByDisplayValue(line)).toBeInTheDocument();
+    }
     expect(screen.getByRole('status')).toHaveTextContent(/home address slot/i);
 
     const directoryCalls = fetchMock.mock.calls.filter(([url]) => new URL(url, 'http://localhost').pathname.startsWith('/v1/'));
@@ -64,9 +69,41 @@ describe('Word fee pane: choosing 0406 fills the Client-role company', () => {
   it('fails closed without an FD session and sends nothing to the directory', async () => {
     const fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
-    render(<FeeProposalPane inWord={false} busy={null} run={jest.fn()} signIn={{ state: 'needs_sign_in', reason: null, signIn: jest.fn() }} />);
+    render(<FeeProposalPane inWord={false} busy={null} run={jest.fn()} signIn={{ state: 'needs_sign_in', reason: null, account: null, signIn: jest.fn() }} />);
     await userEvent.type(screen.getByPlaceholderText(/Search by job # or name/i), '0406');
     expect(await screen.findByText(/Sign in with Microsoft to search/i)).toBeInTheDocument();
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/'))).toBe(false));
+  });
+
+  it('defaults the engineer to the signed-in person and keeps a manual change through the prefill poll', async () => {
+    const prefills = [pending0406(), served0406()];
+    global.fetch = jest.fn(async (url: string) => {
+      const path = new URL(url, 'http://localhost').pathname;
+      if (path === '/v1/projects') return json(searchPage([project0406()]));
+      if (path.endsWith('/fee-proposal-prefill')) return json(prefills.shift());
+      return json(null, 204);
+    }) as unknown as typeof fetch;
+    setDirectoryAccessTokenProvider(async () => fixtureAccessToken());
+
+    const { rerender } = render(<FeeProposalPane inWord={false} busy={null} run={jest.fn()} signIn={signedIn} />);
+    const engineer = (await screen.findByDisplayValue('Sam Bennett')) as HTMLSelectElement;
+    expect(engineer.tagName).toBe('SELECT');
+    expect(Array.from(engineer.options).map((o) => o.value)).toEqual(['', 'Sam Bennett', 'Kirsty Cameron']);
+
+    await userEvent.selectOptions(engineer, 'Kirsty Cameron');
+    await userEvent.type(screen.getByPlaceholderText(/Search by job # or name/i), '0406');
+    await userEvent.click(await screen.findByText(LABEL_0406));
+    expect(await screen.findByDisplayValue('Taylor Wimpey North Thames', {}, { timeout: 5000 })).toBeInTheDocument();
+    rerender(<FeeProposalPane inWord={false} busy={null} run={jest.fn()} signIn={{ ...signedIn }} />);
+    expect(engineer.value).toBe('Kirsty Cameron');
+  }, 10000);
+
+  it('leaves the engineer unselected with a hint when the signed-in person is not on the list', async () => {
+    global.fetch = jest.fn() as unknown as typeof fetch;
+    const guest = { ...signedIn, account: { key: 'g', username: 'visitor@firedynamicsgroup.com', name: 'Visiting Engineer' } };
+    render(<FeeProposalPane inWord={false} busy={null} run={jest.fn()} signIn={guest} />);
+    expect(await screen.findByText(/Visiting Engineer is not on the engineer list/i)).toBeInTheDocument();
+    const select = screen.getByDisplayValue('Select Engineer') as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['', 'Sam Bennett', 'Kirsty Cameron']);
   });
 });

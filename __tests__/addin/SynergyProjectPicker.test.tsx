@@ -75,7 +75,7 @@ describe('SynergyProjectPicker', () => {
   it('offers Microsoft sign-in when the FD session needs it, and reports why sign-in is unavailable', async () => {
     const signIn = jest.fn().mockResolvedValue('signed_in');
     const { rerender } = render(
-      <SynergyProjectPicker onSelect={jest.fn()} onUnlink={jest.fn()} signIn={{ state: 'needs_sign_in', reason: null, signIn }} />,
+      <SynergyProjectPicker onSelect={jest.fn()} onUnlink={jest.fn()} signIn={{ state: 'needs_sign_in', reason: null, account: null, signIn }} />,
     );
     await userEvent.click(screen.getByRole('button', { name: /Sign in with Microsoft/i }));
     expect(signIn).toHaveBeenCalled();
@@ -83,7 +83,7 @@ describe('SynergyProjectPicker', () => {
       <SynergyProjectPicker
         onSelect={jest.fn()}
         onUnlink={jest.fn()}
-        signIn={{ state: 'unavailable', reason: 'This Word does not support NestedAppAuth 1.1.', signIn }}
+        signIn={{ state: 'unavailable', reason: 'This Word does not support NestedAppAuth 1.1.', account: null, signIn }}
       />,
     );
     expect(screen.getByText(/NestedAppAuth 1\.1/)).toBeInTheDocument();

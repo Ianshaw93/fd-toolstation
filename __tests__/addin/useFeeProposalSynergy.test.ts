@@ -18,6 +18,127 @@ function apply(result: Hook, prefill: FeeProposalPrefill) {
   act(() => result.current.dispatch({ type: 'APPLY_DIRECTORY_PREFILL', prefill }));
 }
 
+
+function withAddress(lines: string[]): FeeProposalPrefill {
+  const body = served0406();
+  body.fields.clientAddressLines = { ...body.fields.clientAddressLines, value: lines };
+  return body;
+}
+
+describe('imported address lines', () => {
+  it('splits each comma into its own line and keeps every part beyond six for review', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    link(result, project0406());
+    apply(result, withAddress(['Unit 4, Block B, Dock Yard,', 'Station road, Kings Langley', 'Hertfordshire, WD4 8LZ, United Kingdom']));
+    expect(result.current.state.client.address_lines).toEqual([
+      'Unit 4', 'Block B', 'Dock Yard', 'Station road', 'Kings Langley', 'Hertfordshire', 'WD4 8LZ', 'United Kingdom',
+    ]);
+    expect(result.current.state.client_role_notice).toMatch(/8 lines/);
+    expect(result.current.buildRequest().client.address_lines).toHaveLength(8);
+  });
+
+  it('clears the split address on a project switch, because it is what was filled', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    link(result, project0406());
+    apply(result, served0406());
+    act(() => result.current.dispatch({ type: 'UNLINK_SYNERGY_PROJECT' }));
+    link(result, other());
+    expect(result.current.state.client.address_lines).toEqual(['', '', '', '', '', '']);
+  });
+
+  it('keeps an address the user edited after it was split', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    link(result, project0406());
+    apply(result, served0406());
+    const edited = [...result.current.state.client.address_lines];
+    edited[3] = 'Herts';
+    act(() => result.current.dispatch({ type: 'SET_CLIENT', field: 'address_lines', value: edited }));
+    apply(result, served0406());
+    link(result, other());
+    expect(result.current.state.client.address_lines[3]).toBe('Herts');
+    expect(result.current.state.client.address_lines[0]).toBe('The Dock');
+  });
+
+  it('does not split what the user types', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    act(() => result.current.dispatch({ type: 'SET_CLIENT', field: 'address_lines', value: ['1 High St, Town', '', '', '', '', ''] }));
+    expect(result.current.state.client.address_lines[0]).toBe('1 High St, Town');
+  });
+});
+
+const SAM = { key: 'acct-sam', engineer: 'Sam Bennett' };
+const KIRSTY = { key: 'acct-kirsty', engineer: 'Kirsty Cameron' };
+
+function signedInAs(result: Hook, who: { key: string; engineer: string | null } | null) {
+  act(() =>
+    result.current.dispatch({ type: 'APPLY_ACCOUNT_ENGINEER', accountKey: who?.key ?? null, engineer: who?.engineer ?? null }),
+  );
+}
+
+describe('engineer from the signed-in Microsoft account', () => {
+  it('defaults the engineer when the form has none', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    signedInAs(result, SAM);
+    expect(result.current.state.fee_options.engineer_name).toBe('Sam Bennett');
+  });
+
+  it('keeps a manual choice made before sign-in finishes', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    act(() => result.current.dispatch({ type: 'SET_FEE_OPTIONS', field: 'engineer_name', value: 'Kirsty Cameron' }));
+    signedInAs(result, SAM);
+    expect(result.current.state.fee_options.engineer_name).toBe('Kirsty Cameron');
+  });
+
+  it('keeps a manual change through re-renders, prefill polls and project switches', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    signedInAs(result, SAM);
+    act(() => result.current.dispatch({ type: 'SET_FEE_OPTIONS', field: 'engineer_name', value: 'Kirsty Cameron' }));
+    signedInAs(result, SAM);
+    link(result, project0406());
+    apply(result, pending0406());
+    apply(result, served0406());
+    act(() => result.current.dispatch({ type: 'UNLINK_SYNERGY_PROJECT' }));
+    link(result, other());
+    expect(result.current.state.fee_options.engineer_name).toBe('Kirsty Cameron');
+  });
+
+  it('keeps an explicit "Select Engineer" choice', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    signedInAs(result, SAM);
+    act(() => result.current.dispatch({ type: 'SET_FEE_OPTIONS', field: 'engineer_name', value: '' }));
+    signedInAs(result, KIRSTY);
+    expect(result.current.state.fee_options.engineer_name).toBe('');
+  });
+
+  it('follows an account switch only while the engineer is still the automatic one', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    signedInAs(result, SAM);
+    signedInAs(result, KIRSTY);
+    expect(result.current.state.fee_options.engineer_name).toBe('Kirsty Cameron');
+    signedInAs(result, { key: 'acct-guest', engineer: null });
+    expect(result.current.state.fee_options.engineer_name).toBe('');
+  });
+
+  it('clears the automatic engineer on sign-out and never keeps another person', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    signedInAs(result, SAM);
+    signedInAs(result, null);
+    expect(result.current.state.fee_options.engineer_name).toBe('');
+  });
+
+  it('keeps an engineer the form was seeded with', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    act(() =>
+      result.current.dispatch({
+        type: 'HYDRATE',
+        state: { ...result.current.state, fee_options: { ...result.current.state.fee_options, engineer_name: "Thomas O'Driscoll" } },
+      }),
+    );
+    signedInAs(result, SAM);
+    expect(result.current.state.fee_options.engineer_name).toBe("Thomas O'Driscoll");
+  });
+});
+
 describe('useFeeProposal with the project directory', () => {
   it('links 0406 by its directory id and fills the project name from the hit', () => {
     const { result } = renderHook(() => useFeeProposal());
@@ -41,7 +162,7 @@ describe('useFeeProposal with the project directory', () => {
     expect(client.company_name).toBe('Taylor Wimpey North Thames');
     expect(client.first_name).toBe('');
     expect(client.surname).toBe('');
-    expect(client.address_lines).toEqual(['The Dock,', 'Station road, Kings Langley', 'Hertfordshire', 'WD4 8LZ', 'United Kingdom', '']);
+    expect(client.address_lines).toEqual(['The Dock', 'Station road', 'Kings Langley', 'Hertfordshire', 'WD4 8LZ', 'United Kingdom']);
     expect(project.project_location).toBe('');
     expect(project.country).toBe('EW');
     expect(fee_options.engineer_name).toBe('');
