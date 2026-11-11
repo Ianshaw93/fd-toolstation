@@ -117,15 +117,15 @@ describe('company contact name tags', () => {
     expect(result.current.state.client.first_name).toBe('');
   });
 
-  it('on a project switch clears picked names that are unchanged and keeps edited ones', () => {
+  it('on a project switch keeps picked names (the user chose them) and drops the old company people', () => {
     const { result } = renderHook(() => useFeeProposal());
     link(result, project0406());
     apply(result, served0406WithContacts());
     pick(result, 12557134);
     act(() => result.current.dispatch({ type: 'UNLINK_SYNERGY_PROJECT' }));
     link(result, other());
-    expect(result.current.state.client.first_name).toBe('');
-    expect(result.current.state.client.surname).toBe('');
+    expect(result.current.state.client.first_name).toBe('Tyler');
+    expect(result.current.state.client.surname).toBe('Watkins');
     expect(result.current.state.contact_suggestions.people).toEqual([]);
 
     link(result, project0406());

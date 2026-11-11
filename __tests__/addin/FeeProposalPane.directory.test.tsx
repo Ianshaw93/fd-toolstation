@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import FeeProposalPane from '../../components/addin/FeeProposalPane';
 import { setDirectoryAccessTokenProvider } from '../../lib/directory-auth';
@@ -227,4 +227,35 @@ describe('Word fee pane: choosing 0406 fills the Client-role company', () => {
     await userEvent.click(await screen.findByText(LABEL_0406));
     expect(await screen.findByTestId('company-contacts-status')).toHaveTextContent(/not everyone at the company is listed/i);
   });
+
+  it('typed values stay; the project value is offered inline with Use new value / Keep mine, decided in any order', async () => {
+    global.fetch = jest.fn(async (url: string) => {
+      const path = new URL(url, 'http://localhost').pathname;
+      if (path === '/v1/projects') return json(searchPage([project0406()]));
+      if (path.endsWith('/fee-proposal-prefill')) return json(served0406WithContacts());
+      return json(null, 204);
+    }) as unknown as typeof fetch;
+    setDirectoryAccessTokenProvider(async () => fixtureAccessToken());
+    render(<FeeProposalPane inWord={false} busy={null} run={jest.fn()} signIn={signedIn} />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: 'Company' }), 'Typed Co');
+    await userEvent.type(screen.getByPlaceholderText('Address line 1'), '9 Typed Street');
+    await userEvent.type(screen.getByPlaceholderText(/Search by job # or name/i), '0406');
+    await userEvent.click(await screen.findByText(LABEL_0406));
+
+    const company = await screen.findByRole('group', { name: /Suggested company from 0406 Former Homebase Site North Finchley/ });
+    expect(company).toHaveTextContent('Taylor Wimpey North Thames');
+    const address = screen.getByRole('group', { name: /Suggested address from 0406 Former Homebase Site North Finchley/ });
+    expect(address).toHaveTextContent(/The Dock.*Station road.*United Kingdom/);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Company' })).toHaveValue('Typed Co');
+
+    await userEvent.click(within(address).getByRole('button', { name: 'Keep mine' }));
+    expect(screen.getByPlaceholderText('Address line 1')).toHaveValue('9 Typed Street');
+    expect(screen.queryByRole('group', { name: /Suggested address/ })).toBeNull();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Company' }), ' Ltd');
+    await userEvent.click(within(company).getByRole('button', { name: 'Use new value' }));
+    expect(screen.getByRole('textbox', { name: 'Company' })).toHaveValue('Taylor Wimpey North Thames');
+    expect(screen.getByTestId('source-company')).toHaveTextContent('From Total Synergy');
+  }, 10000);
 });
