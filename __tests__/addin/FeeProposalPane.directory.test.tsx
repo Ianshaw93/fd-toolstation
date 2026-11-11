@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import FeeProposalPane from '../../components/addin/FeeProposalPane';
 import { setDirectoryAccessTokenProvider } from '../../lib/directory-auth';
-import { fixtureAccessToken, LABEL_0406, pending0406, project0406, REF_0406, searchPage, served0406 } from '../../test-fixtures/directory-contract-v1';
+import { fixtureAccessToken, LABEL_0406, pending0406, project0406, REF_0406, searchPage, served0406, served0406WithContacts } from '../../test-fixtures/directory-contract-v1';
 
 jest.mock('../../lib/word-addin-api', () => ({
   fetchEngineersViaProxy: jest.fn().mockResolvedValue([
@@ -105,5 +105,56 @@ describe('Word fee pane: choosing 0406 fills the Client-role company', () => {
     expect(await screen.findByText(/Visiting Engineer is not on the engineer list/i)).toBeInTheDocument();
     const select = screen.getByDisplayValue('Select Engineer') as HTMLSelectElement;
     expect(Array.from(select.options).map((o) => o.value)).toEqual(['', 'Sam Bennett', 'Kirsty Cameron']);
+  });
+
+  it('shows the company people as name tags and fills first name and surname only when one is clicked', async () => {
+    const prefills = [pending0406(), served0406WithContacts()];
+    global.fetch = jest.fn(async (url: string) => {
+      const path = new URL(url, 'http://localhost').pathname;
+      if (path === '/v1/projects') return json(searchPage([project0406()]));
+      if (path.endsWith('/fee-proposal-prefill')) return json(prefills.shift() ?? served0406WithContacts());
+      return json(null, 204);
+    }) as unknown as typeof fetch;
+    setDirectoryAccessTokenProvider(async () => fixtureAccessToken());
+
+    render(<FeeProposalPane inWord={false} busy={null} run={jest.fn()} signIn={signedIn} />);
+    await userEvent.type(screen.getByPlaceholderText(/Search by job # or name/i), '0406');
+    await userEvent.click(await screen.findByText(LABEL_0406));
+
+    const group = await screen.findByRole('group', { name: 'Taylor Wimpey North Thames company contacts' }, { timeout: 5000 });
+    const tags = Array.from(group.querySelectorAll('button')).map((b) => b.textContent);
+    expect(tags).toEqual(['Louie Sharp', 'Matt Christensen', 'Tyler Watkins']);
+    const firstName = screen.getByLabelText('First Name') as HTMLInputElement;
+    const surname = screen.getByLabelText('Surname') as HTMLInputElement;
+    expect(firstName.value).toBe('');
+    expect(screen.getByRole('button', { name: 'Louie Sharp' })).toHaveAttribute('aria-pressed', 'false');
+
+    screen.getByRole('button', { name: 'Matt Christensen' }).focus();
+    await userEvent.keyboard('{Enter}');
+    expect(firstName.value).toBe('Matt');
+    expect(surname.value).toBe('Christensen');
+    expect(screen.getByRole('button', { name: 'Matt Christensen' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByDisplayValue('Taylor Wimpey North Thames')).toBeInTheDocument();
+
+    await userEvent.clear(firstName);
+    await userEvent.type(firstName, 'Matthew');
+    expect(firstName.value).toBe('Matthew');
+    expect(screen.getByRole('button', { name: 'Matt Christensen' })).toHaveAttribute('aria-pressed', 'false');
+  }, 10000);
+
+  it('has no name tags when the directory sends no company people', async () => {
+    global.fetch = jest.fn(async (url: string) => {
+      const path = new URL(url, 'http://localhost').pathname;
+      if (path === '/v1/projects') return json(searchPage([project0406()]));
+      if (path.endsWith('/fee-proposal-prefill')) return json(served0406());
+      return json(null, 204);
+    }) as unknown as typeof fetch;
+    setDirectoryAccessTokenProvider(async () => fixtureAccessToken());
+    render(<FeeProposalPane inWord={false} busy={null} run={jest.fn()} signIn={signedIn} />);
+    await userEvent.type(screen.getByPlaceholderText(/Search by job # or name/i), '0406');
+    await userEvent.click(await screen.findByText(LABEL_0406));
+    expect(await screen.findByDisplayValue('Taylor Wimpey North Thames')).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /company contacts/ })).toBeNull();
+    expect(screen.getByLabelText('First Name')).toHaveValue('');
   });
 });

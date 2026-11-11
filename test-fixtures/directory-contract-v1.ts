@@ -120,3 +120,21 @@ export function fixtureAccessToken(claims: Record<string, unknown> = {}): string
     'fixture',
   ].join('.');
 }
+
+/**
+ * PROPOSED additive field, not yet in the directory contract: client.contactSuggestions.
+ * People are the three active Personnel whose formal parentContactId is the 0406 Client company
+ * (Contacts/Index criteria.parentContactId=11518909, captured 2026-11-11). None is a 0406
+ * project contact. Test fixture only; not live data.
+ */
+export const TAYLOR_WIMPEY_PEOPLE = [
+  { id: 12655215, displayName: 'Louie Sharp', firstName: 'Louie', lastName: 'Sharp' },
+  { id: 11518910, displayName: 'Matt Christensen', firstName: 'Matt', lastName: 'Christensen' },
+  { id: 12557134, displayName: 'Tyler Watkins', firstName: 'Tyler', lastName: 'Watkins' },
+].map((person) => ({ ...person, companyId: 11518909, isActive: true, source: 'total-synergy', association: 'company' }));
+
+export function served0406WithContacts(): FeeProposalPrefill {
+  const body = served0406();
+  (body.client as unknown as { contactSuggestions: unknown[] }).contactSuggestions = TAYLOR_WIMPEY_PEOPLE.map((p) => ({ ...p }));
+  return body;
+}

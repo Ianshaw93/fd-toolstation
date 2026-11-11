@@ -2,7 +2,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useFeeProposal } from '../../hooks/useFeeProposal';
 import { renderFeeProposal } from '../../lib/word-addin-api';
 import type { DirectoryProject, FeeProposalPrefill } from '../../lib/vendor/fd-directory-client';
-import { pending0406, project0406, REF_0406, served0406 } from '../../test-fixtures/directory-contract-v1';
+import { pending0406, project0406, REF_0406, served0406, served0406WithContacts } from '../../test-fixtures/directory-contract-v1';
 
 type Hook = { current: ReturnType<typeof useFeeProposal> };
 
@@ -63,6 +63,85 @@ describe('imported address lines', () => {
     const { result } = renderHook(() => useFeeProposal());
     act(() => result.current.dispatch({ type: 'SET_CLIENT', field: 'address_lines', value: ['1 High St, Town', '', '', '', '', ''] }));
     expect(result.current.state.client.address_lines[0]).toBe('1 High St, Town');
+  });
+});
+
+function pick(result: Hook, id: number) {
+  act(() => result.current.dispatch({ type: 'PICK_CLIENT_CONTACT', contactId: id }));
+}
+
+describe('company contact name tags', () => {
+  it('lists the company people when they arrive and fills no name on its own', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    link(result, project0406());
+    apply(result, served0406WithContacts());
+    expect(result.current.state.contact_suggestions.companyName).toBe('Taylor Wimpey North Thames');
+    expect(result.current.state.contact_suggestions.people.map((p) => p.displayName)).toEqual(['Louie Sharp', 'Matt Christensen', 'Tyler Watkins']);
+    expect(result.current.state.client.first_name).toBe('');
+    expect(result.current.state.client.surname).toBe('');
+  });
+
+  it('fills the structured first name and surname on a click, and leaves company and address alone', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    link(result, project0406());
+    apply(result, served0406WithContacts());
+    const before = result.current.state.client;
+    pick(result, 11518910);
+    expect(result.current.state.client.first_name).toBe('Matt');
+    expect(result.current.state.client.surname).toBe('Christensen');
+    expect(result.current.state.client.company_name).toBe(before.company_name);
+    expect(result.current.state.client.address_lines).toEqual(before.address_lines);
+    expect(result.current.state.client_contact_pick?.contactId).toBe(11518910);
+  });
+
+  it('a click replaces typed names, and a later poll keeps them and any edit', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    link(result, project0406());
+    act(() => result.current.dispatch({ type: 'SET_CLIENT', field: 'first_name', value: 'Typed' }));
+    apply(result, served0406WithContacts());
+    expect(result.current.state.client.first_name).toBe('Typed');
+    pick(result, 12655215);
+    expect(result.current.state.client.first_name).toBe('Louie');
+    apply(result, served0406WithContacts());
+    expect(result.current.state.client.first_name).toBe('Louie');
+    act(() => result.current.dispatch({ type: 'SET_CLIENT', field: 'surname', value: 'Sharpe' }));
+    apply(result, served0406WithContacts());
+    expect(result.current.state.client.surname).toBe('Sharpe');
+  });
+
+  it('ignores a pick for someone not offered', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    link(result, project0406());
+    apply(result, served0406WithContacts());
+    pick(result, 11754336);
+    expect(result.current.state.client.first_name).toBe('');
+  });
+
+  it('on a project switch clears picked names that are unchanged and keeps edited ones', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    link(result, project0406());
+    apply(result, served0406WithContacts());
+    pick(result, 12557134);
+    act(() => result.current.dispatch({ type: 'UNLINK_SYNERGY_PROJECT' }));
+    link(result, other());
+    expect(result.current.state.client.first_name).toBe('');
+    expect(result.current.state.client.surname).toBe('');
+    expect(result.current.state.contact_suggestions.people).toEqual([]);
+
+    link(result, project0406());
+    apply(result, served0406WithContacts());
+    pick(result, 12557134);
+    act(() => result.current.dispatch({ type: 'SET_CLIENT', field: 'first_name', value: 'Ty' }));
+    link(result, other());
+    expect(result.current.state.client.first_name).toBe('Ty');
+    expect(result.current.state.client.surname).toBe('Watkins');
+  });
+
+  it('ignores suggestions that arrive for an earlier selection', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    link(result, other());
+    apply(result, served0406WithContacts());
+    expect(result.current.state.contact_suggestions.people).toEqual([]);
   });
 });
 
