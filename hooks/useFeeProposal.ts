@@ -20,6 +20,13 @@ import { splitAddressLines } from '../lib/address-format';
 import { NO_CONTACT_SUGGESTIONS, readContactSuggestions, type ContactSuggestions } from '../lib/client-contact-suggestions';
 import { prefillNotice } from '../lib/directory-prefill';
 import {
+  FIELD_KEYS,
+  proposalsFor,
+  REVIEW_FIELDS,
+  type DirectoryProposals,
+  type ReviewField,
+} from '../lib/directory-proposals';
+import {
   applyContactSuggestion,
   applyFeeProposalPrefill,
   type DirectoryProject,
@@ -53,6 +60,14 @@ interface FeeProposalState {
   contact_suggestions: ContactSuggestions;
   /** The tag the user last clicked, so a project switch can clear those names if still unchanged. */
   client_contact_pick: { contactId: number; firstName: string; lastName: string } | null;
+  /** Values the linked project offers for fields the user owns, waiting for Use new value / Keep mine. */
+  directory_proposals: DirectoryProposals;
+  /** Per field, the proposed value the user chose to keep their own over (this project only). */
+  directory_declined: Partial<Record<ReviewField, string>>;
+  /** User-owned values that came from an earlier project, by that project's label. */
+  carried_from: Partial<Record<ReviewField, string>>;
+  /** Label of the project linked most recently, kept through an unlink. */
+  last_project_label: string | null;
 }
 
 export type FeeProposalSnapshot = FeeProposalState;
@@ -68,6 +83,7 @@ type Action =
   /** The signed-in account changed (null: signed out) and this fee-list engineer matches it, if any. */
   | { type: 'APPLY_ACCOUNT_ENGINEER'; accountKey: string | null; engineer: string | null }
   | { type: 'PICK_CLIENT_CONTACT'; contactId: number }
+  | { type: 'RESOLVE_DIRECTORY_PROPOSAL'; field: ReviewField; choice: 'use' | 'keep' }
   | { type: 'UNLINK_SYNERGY_PROJECT' }
   | { type: 'SET_FEE_OPTIONS'; field: keyof FeeOptions; value: string | number | boolean }
   | { type: 'SET_SERVICE_1_4'; key: ServiceKey1to4; field: keyof ServiceConfig; value: boolean | number | string | null }
@@ -96,6 +112,10 @@ function initialState(): FeeProposalState {
     directory_review: [],
     contact_suggestions: NO_CONTACT_SUGGESTIONS,
     client_contact_pick: null,
+    directory_proposals: {},
+    directory_declined: {},
+    carried_from: {},
+    last_project_label: null,
     fee_options: { engineer_name: '', pii_limit: 100000, include_hourly_rates: false },
     design_stages_1_4: {
       stage_1: defaultServiceConfig(),
@@ -159,6 +179,13 @@ function carryKept(previous: Partial<PrefillTarget>, merged: { applied: Partial<
   return { ...carried, ...merged.applied };
 }
 
+function without<T extends object, K extends keyof T>(record: T, key: K): T {
+  if (!(key in record)) return record;
+  const next = { ...record };
+  delete next[key];
+  return next;
+}
+
 function withSplitAddress(prefill: FeeProposalPrefill): FeeProposalPrefill {
   const address = prefill.fields.clientAddressLines;
   if (!Array.isArray(address.value)) return prefill;
@@ -204,8 +231,10 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
       };
     }
 
-    case 'SET_CLIENT':
-      return { ...state, client: { ...state.client, [action.field]: action.value } };
+    case 'SET_CLIENT': {
+      const field = action.field === 'company_name' ? 'company' : action.field === 'address_lines' ? 'address' : 'names';
+      return { ...state, client: { ...state.client, [action.field]: action.value }, carried_from: without(state.carried_from, field) };
+    }
 
     case 'SET_PROJECT': {
       if (action.field === 'country') {
@@ -217,18 +246,20 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         return {
           ...state,
           project: { ...state.project, country, vat_applicable, legislation },
+          carried_from: without(state.carried_from, 'country'),
         };
       }
-      return { ...state, project: { ...state.project, [action.field]: action.value } };
+      return {
+        ...state,
+        project: { ...state.project, [action.field]: action.value },
+        carried_from: action.field === 'project_name' ? without(state.carried_from, 'projectName') : state.carried_from,
+      };
     }
 
     case 'LINK_DIRECTORY_PROJECT': {
       const { project } = action;
       const pick = state.client_contact_pick;
-      if (pick && state.client.first_name === pick.firstName && state.client.surname === pick.lastName) {
-        state = { ...state, client: { ...state.client, first_name: '', surname: '' } };
-      }
-      state = { ...state, client_contact_pick: null, contact_suggestions: NO_CONTACT_SUGGESTIONS };
+      const pickedNames = !!pick && state.client.first_name === pick.firstName && state.client.surname === pick.lastName;
       // No prefill yet: values filled for the previous project go back to their defaults.
       const reset = applyFeeProposalPrefill({
         current: prefillTarget(state),
@@ -243,11 +274,25 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         values.projectName = project.name;
         applied.projectName = project.name;
       }
+      // Values the user still owns that came from the previous project say so; nothing is cleared.
+      const carried: Partial<Record<ReviewField, string>> = {};
+      for (const field of REVIEW_FIELDS) {
+        const owned = FIELD_KEYS[field].some((key) => reset.kept.includes(key));
+        const origin = state.carried_from[field] ?? state.last_project_label;
+        const fromProject = FIELD_KEYS[field].some((key) => key in state.directory_applied) || (field === 'names' && pickedNames);
+        if (owned && origin && (state.carried_from[field] || fromProject)) carried[field] = origin;
+      }
       const written = writePrefillTarget(state, values, applied);
       return {
         ...written,
         directory_review: 'clientAddressLines' in applied ? state.directory_review : [],
         synergy_project_ref: project.id,
+        last_project_label: project.label,
+        carried_from: carried,
+        directory_proposals: {},
+        directory_declined: {},
+        client_contact_pick: null,
+        contact_suggestions: NO_CONTACT_SUGGESTIONS,
         client_role_notice: null,
         project: {
           ...written.project,
@@ -276,8 +321,18 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
           : null;
       const notice = [prefillNotice(prefill), overflow].filter(Boolean).join(' ');
       const addressReview = merged.needsReview.find((item) => item.field === 'clientAddressLines')?.review ?? [];
+      const proposals = proposalsFor({
+        prefill,
+        values: merged.values,
+        kept: merged.kept,
+        previouslyApplied: state.directory_applied,
+        existing: state.directory_proposals,
+        declined: state.directory_declined,
+        width: PREFILL_DEFAULTS.clientAddressLines.length,
+      });
       return {
         ...writePrefillTarget(state, merged.values, carryKept(state.directory_applied, merged)),
+        directory_proposals: proposals,
         directory_review:
           merged.applied.clientAddressLines !== undefined
             ? addressReview
@@ -289,6 +344,39 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
       };
     }
 
+    case 'RESOLVE_DIRECTORY_PROPOSAL': {
+      const proposal = state.directory_proposals[action.field];
+      if (!proposal || proposal.ref !== state.synergy_project_ref) return state;
+      const proposals = { ...state.directory_proposals };
+      delete proposals[action.field];
+      if (action.choice === 'keep') {
+        return {
+          ...state,
+          directory_proposals: proposals,
+          directory_declined: { ...state.directory_declined, [action.field]: JSON.stringify(proposal.value) },
+        };
+      }
+      const values = { ...prefillTarget(state) };
+      const applied = { ...state.directory_applied };
+      const value = proposal.value;
+      if (action.field === 'names' && typeof value === 'object' && !Array.isArray(value)) {
+        values.clientFirstName = applied.clientFirstName = value.firstName;
+        values.clientSurname = applied.clientSurname = value.lastName;
+      } else if (action.field === 'address' && Array.isArray(value)) {
+        values.clientAddressLines = applied.clientAddressLines = value;
+      } else if (typeof value === 'string') {
+        const key = FIELD_KEYS[action.field][0] as 'clientCompanyName' | 'projectName' | 'projectCountry';
+        values[key] = applied[key] = value;
+      }
+      return {
+        ...writePrefillTarget(state, values, applied),
+        directory_proposals: proposals,
+        carried_from: without(state.carried_from, action.field),
+        directory_review: action.field === 'address' ? (proposal.review ?? []) : state.directory_review,
+        client_contact_pick: action.field === 'names' ? null : state.client_contact_pick,
+      };
+    }
+
     case 'PICK_CLIENT_CONTACT': {
       const person = state.contact_suggestions.people.find((candidate) => candidate.id === action.contactId);
       if (!person) return state;
@@ -297,6 +385,7 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         ...state,
         client: { ...state.client, first_name: picked.clientFirstName, surname: picked.clientSurname },
         client_contact_pick: { contactId: person.id, firstName: picked.clientFirstName, lastName: picked.clientSurname },
+        carried_from: without(state.carried_from, 'names'),
       };
     }
 
@@ -327,6 +416,7 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         synergy_project_ref: null,
         client_role_notice: null,
         contact_suggestions: NO_CONTACT_SUGGESTIONS,
+        directory_proposals: {},
         project: {
           ...state.project,
           synergy_project_id: undefined,

@@ -11,7 +11,9 @@ export type Provenance =
   | { kind: 'synergy'; review?: AddressReview }
   | { kind: 'microsoft' }
   | { kind: 'contact' }
-  | { kind: 'edited'; was: FillSource };
+  | { kind: 'edited'; was: FillSource }
+  /** The user's own value, kept from an earlier project; it is not from the linked one. */
+  | { kind: 'carried'; from: string };
 
 export interface FieldProvenance {
   company: Provenance | null;
@@ -51,12 +53,16 @@ export function fieldProvenance(state: FeeProposalSnapshot): FieldProvenance {
   if (state.engineer_source === 'account') engineer = { kind: 'microsoft' };
   else if (state.engineer_source === 'user' && state.engineer_was_auto) engineer = { kind: 'edited', was: 'microsoft' };
 
+  const carried = (field: keyof typeof state.carried_from, otherwise: Provenance | null): Provenance | null => {
+    const from = state.carried_from[field];
+    return from ? { kind: 'carried', from } : otherwise;
+  };
   return {
-    company: fromSynergy(client.company_name ?? '', applied.clientCompanyName),
-    names,
-    address,
-    projectName: fromSynergy(project.project_name, applied.projectName),
-    country: fromSynergy(project.country, applied.projectCountry),
+    company: carried('company', fromSynergy(client.company_name ?? '', applied.clientCompanyName)),
+    names: carried('names', names),
+    address: carried('address', address),
+    projectName: carried('projectName', fromSynergy(project.project_name, applied.projectName)),
+    country: carried('country', fromSynergy(project.country, applied.projectCountry)),
     engineer,
   };
 }

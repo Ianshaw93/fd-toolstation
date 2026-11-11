@@ -42,7 +42,11 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
   }, []);
 
   const provenance = fieldProvenance(state);
-  const announcement = provenanceAnnouncement(provenance);
+  const pendingReview = Object.keys(state.directory_proposals).length;
+  const announcement = [
+    provenanceAnnouncement(provenance),
+    pendingReview ? `${pendingReview} field${pendingReview > 1 ? 's have' : ' has'} a different value in Total Synergy to review.` : '',
+  ].filter(Boolean).join(' ');
   const account = signIn?.state === 'signed_in' ? signIn.account : null;
   const accountEngineer = engineerForAccount(account, engineers);
   // Waits for the engineer list, so a signed-in person on the list is never treated as unknown.
@@ -116,10 +120,11 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
           showCompany
           contactSuggestions={state.contact_suggestions}
           provenance={provenance}
+          proposals={state.directory_proposals}
         />
       </CollapsibleSection>
       <CollapsibleSection title="Project Details" dense defaultOpen={true}>
-        <ProjectDetailsSection project={state.project} dispatch={dispatch} provenance={provenance} />
+        <ProjectDetailsSection project={state.project} dispatch={dispatch} provenance={provenance} proposals={state.directory_proposals} />
       </CollapsibleSection>
       <CollapsibleSection title="Fee Options" dense defaultOpen={true}>
         <FeeOptionsSection feeOptions={state.fee_options} engineers={engineers} dispatch={dispatch} provenance={provenance} />

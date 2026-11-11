@@ -17,6 +17,13 @@ const WAS: Record<FillSource, string> = {
 /** Compact per-field "where this came from" tag. Text, not colour, carries the meaning. */
 export default function SourceBadge({ provenance, testId }: { provenance: Provenance | null | undefined; testId: string }) {
   if (!provenance) return null;
+  if (provenance.kind === 'carried') {
+    return (
+      <span data-testid={testId} title={`Yours, from ${provenance.from}`} className="shrink-0 rounded border border-gray-300 bg-gray-50 px-1.5 py-0.5 text-[11px] leading-none text-gray-700">
+        Kept from previous project<span className="sr-only"> ({provenance.from})</span>
+      </span>
+    );
+  }
   if (provenance.kind === 'edited') {
     return (
       <span data-testid={testId} title={WAS[provenance.was]} className="shrink-0 rounded border border-gray-300 bg-white px-1.5 py-0.5 text-[11px] leading-none text-gray-600">

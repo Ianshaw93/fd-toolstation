@@ -4,6 +4,8 @@ import { Dispatch } from 'react';
 import type { ProjectDetails } from '../../lib/fee-types';
 import { COUNTRIES, LEGISLATION_REFERENCES } from '../../lib/fee-constants';
 import type { FieldProvenance } from '../../lib/field-provenance';
+import type { DirectoryProposals } from '../../lib/directory-proposals';
+import FieldProposalReview from './FieldProposalReview';
 import SourceBadge from './SourceBadge';
 
 interface Props {
@@ -11,9 +13,11 @@ interface Props {
   dispatch: Dispatch<any>;
   /** Word task pane only: where autofilled values came from. */
   provenance?: Pick<FieldProvenance, 'projectName' | 'country'>;
+  /** Word task pane only: project values offered for fields the user owns. */
+  proposals?: DirectoryProposals;
 }
 
-export default function ProjectDetailsSection({ project, dispatch, provenance }: Props) {
+export default function ProjectDetailsSection({ project, dispatch, provenance, proposals }: Props) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
@@ -27,6 +31,7 @@ export default function ProjectDetailsSection({ project, dispatch, provenance }:
           onChange={(e) => dispatch({ type: 'SET_PROJECT', field: 'project_name', value: e.target.value })}
           className="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
         />
+        <FieldProposalReview field="projectName" proposal={proposals?.projectName} dispatch={dispatch} />
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Project Location</label>
@@ -57,6 +62,7 @@ export default function ProjectDetailsSection({ project, dispatch, provenance }:
             </label>
           ))}
         </div>
+        <FieldProposalReview field="country" proposal={proposals?.country} dispatch={dispatch} />
       </div>
       {project.country === 'OTHER' && (
         <>
