@@ -48,7 +48,7 @@ describe('useFeeProposal with Synergy project link', () => {
     expect(result.current.state.client.first_name).toBe('');
     expect(result.current.state.client.surname).toBe('');
     expect(result.current.state.fee_options.engineer_name).toBe('');
-    expect(result.current.state.client_role_notice).toMatch(/primary contact was not used/i);
+    expect(result.current.state.client_role_notice).toBeNull();
 
     const req = result.current.buildRequest();
     expect(req.project.synergy_project_id).toBe(2694397);
@@ -173,7 +173,7 @@ describe('useFeeProposal with Synergy project link', () => {
     expect(result.current.state.project.organisation_id).toBeUndefined();
     expect(result.current.state.project.synergy_project_label).toBeUndefined();
     expect(result.current.state.project.project_name).toBe('SYNTH Yard');
-    expect(result.current.state.project.project_location).toBe('1 Project Road');
+    expect(result.current.state.project.project_location).toBe('');
     expect(result.current.state.client_role_notice).toBeNull();
   });
 

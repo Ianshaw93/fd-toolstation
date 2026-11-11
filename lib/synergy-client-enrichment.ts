@@ -1,17 +1,19 @@
 // Typed seam for fee-letter autofill.
 //
-// Official GetProjectById for project 2694397 (0406) returned primaryContactName
-// and an empty site address, and no contact-role assignment. Organisation role
-// Client is 183340. Client Project Manager is 206928 and is not the Client role.
-// The documented v4 OpenAPI has no GET for project contacts or a contact address.
-// primaryContact and site are never copied into the letter. An explicit Client-role
-// record is the only shape that fills company, person, or company address.
+// Official V2 documents ProjectContacts/Index and Contacts/GetContact
+// (https://app.totalsynergy.com/swagger/docs/V2). Role Client is 183340.
+// Client Project Manager is 206928 and is not that role. A GetProjectById
+// primaryContact string is not a role assignment. For a type 20 company, a
+// street-bearing addressHome is used only when postal, work, and other have
+// no street, and it is marked needs review. A person's addressHome is not used.
+// The company name is never written into the salutation. Project country is
+// not inferred from the address country.
 
 export const SYNERGY_CLIENT_ROLE_ID = 183340;
 export const SYNERGY_CLIENT_PROJECT_MANAGER_ROLE_ID = 206928;
 
 export const CLIENT_ROLE_SOURCE_NOTICE =
-  'The documented project read has no Client-role contact or address. The primary contact was not used. Company, name, and address stay as you left them.';
+  'This project record has no Client-role assignment. The primary contact was not used. Company, name, and address stay as you left them.';
 
 export type FeeCountry = 'EW' | 'J' | 'OTHER';
 
@@ -114,7 +116,7 @@ export function applyMissingClientSource(
   clearClientIfAutofilled(next, memory);
   if (clientSnapshot(next) !== clientBefore) {
     next.notice =
-      'The documented project read has no Client-role contact or address. The primary contact was not used. Client details filled from an earlier project were cleared. Values you typed yourself are unchanged.';
+      'This project record has no Client-role assignment. The primary contact was not used. Client details filled from an earlier project were cleared. Values you typed yourself are unchanged.';
   }
   next.autofill = memory;
   return next;
@@ -336,4 +338,252 @@ function isOptionalBoolean(value: unknown): boolean {
 
 function textOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
+}
+
+export type PrefillStatus = 'present' | 'absent' | 'needs_review' | 'unavailable';
+
+export interface PrefillField<T> {
+  value: T | null;
+  status: PrefillStatus;
+  source: string | null;
+}
+
+export interface FeeProposalPrefill {
+  company_name: PrefillField<string>;
+  first_name: PrefillField<string>;
+  surname: PrefillField<string>;
+  address_lines: PrefillField<string[]>;
+  project_name: PrefillField<string>;
+  project_location: PrefillField<string>;
+  country: PrefillField<FeeCountry>;
+  engineer_name: PrefillField<string>;
+  pii_limit: PrefillField<number>;
+  include_hourly_rates: PrefillField<boolean>;
+}
+
+export const COMPANY_ADDRESS_HOME_NOTICE =
+  'Company address was taken from the company addressHome slot and needs review.';
+
+const PREFILL_STATUSES = new Set<PrefillStatus>(['present', 'absent', 'needs_review', 'unavailable']);
+
+export function feeProposalPrefillFromV2(payload: {
+  projectId: number;
+  roleId: number;
+  assignments: unknown[];
+}): FeeProposalPrefill {
+  const clients = payload.assignments.filter((row) => {
+    if (!isRecord(row)) return false;
+    return row.roleId === payload.roleId && payload.roleId === SYNERGY_CLIENT_ROLE_ID;
+  });
+  const prefill = emptyPrefill();
+  if (clients.length !== 1) return prefill;
+  const assignment = clients[0];
+  if (!isRecord(assignment) || !isRecord(assignment.contact)) return prefill;
+  const contact = assignment.contact;
+  const typeId = contact.contactTypeId;
+  if (typeId === 20 && typeof contact.name === 'string' && contact.name.trim()) {
+    prefill.company_name = { value: contact.name, status: 'present', source: 'client_role' };
+  }
+  if (typeId === 21 || typeId === 31) {
+    const first = typeof contact.firstName === 'string' ? contact.firstName.trim() : '';
+    const last = typeof contact.lastName === 'string' ? contact.lastName.trim() : '';
+    if (first) prefill.first_name = { value: first, status: 'present', source: 'client_role' };
+    if (last) prefill.surname = { value: last, status: 'present', source: 'client_role' };
+  }
+  const address = companyAddress(contact);
+  if (address) {
+    prefill.address_lines = {
+      value: padAddress(address.lines),
+      status: address.needsReview ? 'needs_review' : 'present',
+      source: address.source,
+    };
+  }
+  return prefill;
+}
+
+export function parseDirectoryPrefill(payload: unknown):
+  | { ok: true; prefill: FeeProposalPrefill }
+  | { ok: false; reason: 'contract_missing' } {
+  if (!isRecord(payload)) return { ok: false, reason: 'contract_missing' };
+  const company_name = readField<string>(payload.company_name, 'string');
+  const first_name = readField<string>(payload.first_name, 'string');
+  const surname = readField<string>(payload.surname, 'string');
+  const project_name = readField<string>(payload.project_name, 'string');
+  const project_location = readField<string>(payload.project_location, 'string');
+  const engineer_name = readField<string>(payload.engineer_name, 'string');
+  const pii_limit = readField<number>(payload.pii_limit, 'number');
+  const include_hourly_rates = readField<boolean>(payload.include_hourly_rates, 'boolean');
+  const country = readCountryField(payload.country);
+  const address_lines = readAddressField(payload.address_lines);
+  if (!company_name || !first_name || !surname || !project_name || !project_location || !engineer_name || !pii_limit || !include_hourly_rates || !country || !address_lines) {
+    return { ok: false, reason: 'contract_missing' };
+  }
+  return {
+    ok: true,
+    prefill: {
+      company_name,
+      first_name,
+      surname,
+      address_lines,
+      project_name,
+      project_location,
+      country,
+      engineer_name,
+      pii_limit,
+      include_hourly_rates,
+    },
+  };
+}
+
+export function applyFeeProposalPrefill(
+  state: FeeAutofillState,
+  prefill: FeeProposalPrefill,
+  engineerNames: readonly string[],
+  race?: { generation: number; currentGeneration: number },
+): FeeAutofillState & { notice: string | null } {
+  if (race && race.generation !== race.currentGeneration) {
+    return state as FeeAutofillState & { notice: string | null };
+  }
+  const memory: FeeAutofillMemory = { ...(state.autofill ?? {}) };
+  const next: FeeAutofillState & { notice: string | null } = {
+    ...state,
+    address_lines: [...state.address_lines],
+    autofill: memory,
+    notice: null,
+  };
+  writePrefillText(next, memory, 'company_name', prefill.company_name);
+  writePrefillText(next, memory, 'first_name', prefill.first_name);
+  writePrefillText(next, memory, 'surname', prefill.surname);
+  writePrefillText(next, memory, 'project_name', prefill.project_name);
+  writePrefillText(next, memory, 'project_location', prefill.project_location);
+  if (
+    prefill.address_lines.status === 'present' ||
+    prefill.address_lines.status === 'needs_review'
+  ) {
+    const lines = prefill.address_lines.value;
+    if (lines && canReplaceLines(next.address_lines, memory.address_lines)) {
+      const padded = padAddress(lines.filter((line) => line !== ''));
+      next.address_lines = padded;
+      memory.address_lines = padded;
+    }
+  }
+  if (
+    prefill.country.status === 'present' &&
+    prefill.country.value &&
+    (state.autofill?.country === state.country || !state.country_touched)
+  ) {
+    next.country = prefill.country.value;
+    memory.country = prefill.country.value;
+  }
+  if (
+    prefill.engineer_name.status === 'present' &&
+    prefill.engineer_name.value &&
+    engineerNames.includes(prefill.engineer_name.value) &&
+    canReplace(next.engineer_name, memory.engineer_name)
+  ) {
+    next.engineer_name = prefill.engineer_name.value;
+    memory.engineer_name = prefill.engineer_name.value;
+  }
+  if (
+    prefill.pii_limit.status === 'present' &&
+    typeof prefill.pii_limit.value === 'number' &&
+    canReplaceNumber(next.pii_limit, memory.pii_limit, 100000)
+  ) {
+    next.pii_limit = prefill.pii_limit.value;
+    memory.pii_limit = prefill.pii_limit.value;
+  }
+  if (
+    prefill.include_hourly_rates.status === 'present' &&
+    typeof prefill.include_hourly_rates.value === 'boolean' &&
+    canReplaceBoolean(next.include_hourly_rates, memory.include_hourly_rates, false)
+  ) {
+    next.include_hourly_rates = prefill.include_hourly_rates.value;
+    memory.include_hourly_rates = prefill.include_hourly_rates.value;
+  }
+  if (prefill.address_lines.status === 'needs_review' && prefill.address_lines.source === 'company_address_home') {
+    const applied = next.address_lines.some((line) => line !== '') &&
+      memory.address_lines?.join('\n') === next.address_lines.join('\n');
+    if (applied) next.notice = COMPANY_ADDRESS_HOME_NOTICE;
+  }
+  next.autofill = memory;
+  return next;
+}
+
+function writePrefillText(
+  next: FeeAutofillState,
+  memory: FeeAutofillMemory,
+  field: 'company_name' | 'first_name' | 'surname' | 'project_name' | 'project_location',
+  source: PrefillField<string>,
+): void {
+  if (source.status !== 'present' && source.status !== 'needs_review') return;
+  writeText(next, memory, field, source.value);
+}
+
+function emptyPrefill(): FeeProposalPrefill {
+  const absent = <T,>(): PrefillField<T> => ({ value: null, status: 'absent', source: null });
+  return {
+    company_name: absent(),
+    first_name: absent(),
+    surname: absent(),
+    address_lines: absent(),
+    project_name: absent(),
+    project_location: absent(),
+    country: absent(),
+    engineer_name: absent(),
+    pii_limit: absent(),
+    include_hourly_rates: absent(),
+  };
+}
+
+function companyAddress(contact: Record<string, unknown>): { lines: string[]; needsReview: boolean; source: string } | null {
+  if (contact.contactTypeId !== 20) return null;
+  for (const slot of ['addressPostal', 'addressWork', 'addressOther'] as const) {
+    const lines = streetLines(contact[slot]);
+    if (lines) return { lines, needsReview: false, source: slot };
+  }
+  const home = streetLines(contact.addressHome);
+  if (home) return { lines: home, needsReview: true, source: 'company_address_home' };
+  return null;
+}
+
+function streetLines(value: unknown): string[] | null {
+  if (!isRecord(value)) return null;
+  const street = [value.address1, value.address2, value.town].some((part) => typeof part === 'string' && part.trim() !== '');
+  if (!street) return null;
+  return compactAddress(value);
+}
+
+function compactAddress(value: Record<string, unknown>): string[] {
+  const parts = [value.address1, value.address2, value.town, value.state, value.zipCode, value.country];
+  return parts.filter((part): part is string => typeof part === 'string' && part.trim() !== '').slice(0, 6);
+}
+
+function readField<T>(value: unknown, kind: 'string' | 'number' | 'boolean'): PrefillField<T> | null {
+  if (!isRecord(value) || typeof value.status !== 'string' || !PREFILL_STATUSES.has(value.status as PrefillStatus)) return null;
+  const status = value.status as PrefillStatus;
+  const source = typeof value.source === 'string' ? value.source : null;
+  if (value.value === null || value.value === undefined) return { value: null, status, source };
+  if (kind === 'string' && typeof value.value === 'string') return { value: value.value as T, status, source };
+  if (kind === 'number' && typeof value.value === 'number') return { value: value.value as T, status, source };
+  if (kind === 'boolean' && typeof value.value === 'boolean') return { value: value.value as T, status, source };
+  return null;
+}
+
+function readCountryField(value: unknown): PrefillField<FeeCountry> | null {
+  const field = readField<string>(value, 'string');
+  if (!field) return null;
+  if (field.value === null) return { value: null, status: field.status, source: field.source };
+  if (field.value === 'EW' || field.value === 'J' || field.value === 'OTHER') {
+    return { value: field.value, status: field.status, source: field.source };
+  }
+  return null;
+}
+
+function readAddressField(value: unknown): PrefillField<string[]> | null {
+  if (!isRecord(value) || typeof value.status !== 'string' || !PREFILL_STATUSES.has(value.status as PrefillStatus)) return null;
+  const status = value.status as PrefillStatus;
+  const source = typeof value.source === 'string' ? value.source : null;
+  if (value.value === null || value.value === undefined) return { value: null, status, source };
+  if (!Array.isArray(value.value) || value.value.some((line) => typeof line !== 'string')) return null;
+  return { value: value.value, status, source };
 }

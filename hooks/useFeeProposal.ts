@@ -17,10 +17,11 @@ import type {
 } from '../lib/fee-types';
 import { defaultServiceConfig } from '../lib/fee-constants';
 import {
-  applyMissingClientSource,
+  applyFeeProposalPrefill,
   applySynergyEnrichment,
   type FeeAutofillMemory,
   type FeeAutofillState,
+  type FeeProposalPrefill,
   type SynergyFeeEnrichment,
 } from '../lib/synergy-client-enrichment';
 
@@ -57,6 +58,12 @@ type Action =
       type: 'APPLY_SYNERGY_ENRICHMENT';
       generation: number;
       enrichment: SynergyFeeEnrichment;
+      engineer_names: string[];
+    }
+  | {
+      type: 'APPLY_FEE_PREFILL';
+      generation: number;
+      prefill: FeeProposalPrefill;
       engineer_names: string[];
     }
   | { type: 'SET_SYNERGY_NOTICE'; generation: number; notice: string }
@@ -192,10 +199,21 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
     }
 
     case 'LINK_SYNERGY_PROJECT': {
-      const applied = applyMissingClientSource(autofillSlice(state), {
-        project_name: action.project_name ?? null,
-        project_location: action.project_location ?? null,
-      });
+      const absent = { value: null, status: 'absent' as const, source: null };
+      const applied = applyFeeProposalPrefill(autofillSlice(state), {
+        company_name: absent,
+        first_name: absent,
+        surname: absent,
+        address_lines: absent,
+        project_name: action.project_name?.trim()
+          ? { value: action.project_name.trim(), status: 'present', source: 'project_name' }
+          : absent,
+        project_location: absent,
+        country: absent,
+        engineer_name: absent,
+        pii_limit: absent,
+        include_hourly_rates: absent,
+      }, []);
       const written = writeAutofill(state, applied);
       return {
         ...written,
@@ -207,6 +225,17 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
           synergy_project_label: action.label,
         },
       };
+    }
+
+    case 'APPLY_FEE_PREFILL': {
+      if (action.generation !== state.synergy_link_generation) return state;
+      const applied = applyFeeProposalPrefill(
+        autofillSlice(state),
+        action.prefill,
+        action.engineer_names,
+        { generation: action.generation, currentGeneration: state.synergy_link_generation },
+      );
+      return writeAutofill(state, applied);
     }
 
     case 'APPLY_SYNERGY_ENRICHMENT': {

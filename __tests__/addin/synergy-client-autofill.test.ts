@@ -1,6 +1,9 @@
 import {
+  applyFeeProposalPrefill,
   applyMissingClientSource,
   applySynergyEnrichment,
+  feeProposalPrefillFromV2,
+  parseDirectoryPrefill,
   parseFeeEnrichment,
   readOfficialProjectClient,
   SYNERGY_CLIENT_PROJECT_MANAGER_ROLE_ID,
@@ -285,5 +288,146 @@ describe('Synergy client-role autofill', () => {
     expect(mislabeled.ok).toBe(true);
     if (!mislabeled.ok) return;
     expect(mislabeled.enrichment.client_roles).toHaveLength(0);
+  });
+
+  it('fills the company and the exact addressHome lines for the one Client role, and leaves the person empty', () => {
+    const countryOnly = {
+      address1: '',
+      address2: '',
+      town: '',
+      state: '',
+      zipCode: '',
+      country: 'United Kingdom',
+      hasAddress: false,
+    };
+    const prefill = feeProposalPrefillFromV2({
+      projectId: 2694397,
+      roleId: SYNERGY_CLIENT_ROLE_ID,
+      assignments: [
+        {
+          id: 18708053,
+          contactId: 11518909,
+          projectId: 2694397,
+          roleId: SYNERGY_CLIENT_ROLE_ID,
+          roleDisplay: 'Client, Primary, Invoice',
+          contact: {
+            id: 11518909,
+            contactTypeId: 20,
+            name: 'Taylor Wimpey North Thames',
+            firstName: null,
+            lastName: null,
+            parentContactId: null,
+            hasAddresses: true,
+            addressHome: {
+              address1: 'The Dock,',
+              address2: 'Station road, Kings Langley',
+              town: 'Hertfordshire',
+              state: '',
+              zipCode: 'WD4 8LZ',
+              country: 'United Kingdom',
+              hasAddress: false,
+            },
+            addressPostal: countryOnly,
+            addressWork: countryOnly,
+            addressOther: countryOnly,
+          },
+        },
+      ],
+    });
+    const next = applyFeeProposalPrefill(blank(), prefill, ENGINEERS);
+    expect(next.company_name).toBe('Taylor Wimpey North Thames');
+    expect(next.first_name).toBe('');
+    expect(next.surname).toBe('');
+    expect(next.address_lines).toEqual([
+      'The Dock,',
+      'Station road, Kings Langley',
+      'Hertfordshire',
+      'WD4 8LZ',
+      'United Kingdom',
+      '',
+    ]);
+    expect(next.country).toBe('EW');
+    expect(next.project_location).toBe('');
+    expect(next.engineer_name).toBe('');
+    expect(next.pii_limit).toBe(100000);
+    expect(next.include_hourly_rates).toBe(false);
+    expect(next.notice).toMatch(/addressHome/i);
+    expect(next.notice).toMatch(/needs review/i);
+    expect(next.first_name).not.toBe(next.company_name);
+  });
+
+  it('does not use a person addressHome slot as the company address', () => {
+    const prefill = feeProposalPrefillFromV2({
+      projectId: 1,
+      roleId: SYNERGY_CLIENT_ROLE_ID,
+      assignments: [
+        {
+          id: 1,
+          contactId: 2,
+          projectId: 1,
+          roleId: SYNERGY_CLIENT_ROLE_ID,
+          roleDisplay: 'Client',
+          contact: {
+            id: 2,
+            contactTypeId: 21,
+            name: 'Ada Lovelace',
+            firstName: 'Ada',
+            lastName: 'Lovelace',
+            parentContactId: null,
+            hasAddresses: true,
+            addressHome: {
+              address1: '1 Private Street',
+              address2: '',
+              town: 'London',
+              state: '',
+              zipCode: 'SW1A 1AA',
+              country: 'United Kingdom',
+              hasAddress: true,
+            },
+            addressPostal: { address1: '', address2: '', town: '', state: '', zipCode: '', country: 'United Kingdom', hasAddress: false },
+            addressWork: { address1: '', address2: '', town: '', state: '', zipCode: '', country: 'United Kingdom', hasAddress: false },
+            addressOther: { address1: '', address2: '', town: '', state: '', zipCode: '', country: 'United Kingdom', hasAddress: false },
+          },
+        },
+      ],
+    });
+    const next = applyFeeProposalPrefill(blank(), prefill, ENGINEERS);
+    expect(next.first_name).toBe('Ada');
+    expect(next.surname).toBe('Lovelace');
+    expect(next.company_name).toBe('');
+    expect(next.address_lines.every((line) => line === '')).toBe(true);
+  });
+
+  it('keeps a typed address when applying the directory prefill envelope', () => {
+    const typed = blank();
+    typed.company_name = 'Typed Company Ltd';
+    typed.first_name = 'Manual';
+    typed.address_lines = ['1 Typed Street', '', '', '', '', ''];
+    typed.project_location = 'Typed location';
+    const parsed = parseDirectoryPrefill({
+      company_name: { value: 'Taylor Wimpey North Thames', status: 'present', source: 'client_role' },
+      first_name: { value: null, status: 'absent', source: null },
+      surname: { value: null, status: 'absent', source: null },
+      address_lines: {
+        value: ['The Dock,', 'Station road, Kings Langley', 'Hertfordshire', 'WD4 8LZ', 'United Kingdom'],
+        status: 'needs_review',
+        source: 'company_address_home',
+      },
+      project_name: { value: 'Former Homebase Site North Finchley', status: 'present', source: 'project_name' },
+      project_location: { value: null, status: 'absent', source: null },
+      country: { value: null, status: 'absent', source: null },
+      engineer_name: { value: null, status: 'absent', source: null },
+      pii_limit: { value: null, status: 'absent', source: null },
+      include_hourly_rates: { value: null, status: 'absent', source: null },
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const next = applyFeeProposalPrefill(typed, parsed.prefill, ENGINEERS);
+    expect(next.company_name).toBe('Typed Company Ltd');
+    expect(next.first_name).toBe('Manual');
+    expect(next.address_lines[0]).toBe('1 Typed Street');
+    expect(next.project_location).toBe('Typed location');
+    expect(next.project_name).toBe('Former Homebase Site North Finchley');
+    expect(next.country).toBe('EW');
   });
 });

@@ -13,8 +13,8 @@ import FeeOptionsSection from '../fee-proposal/FeeOptionsSection';
 import StageCards from './StageCards';
 import SynergyProjectPicker from './SynergyProjectPicker';
 import { SERVICE_LABELS_1_4, SERVICE_LABELS_5, SERVICE_LABELS_6 } from '../../lib/fee-constants';
-import { CLIENT_ROLE_SOURCE_NOTICE, parseFeeEnrichment } from '../../lib/synergy-client-enrichment';
-import { fetchProjectEnrichment } from '../../lib/synergy-api';
+import { parseDirectoryPrefill } from '../../lib/synergy-client-enrichment';
+import { fetchFeeProposalPrefill } from '../../lib/synergy-api';
 
 // The fee proposal inside Word: the same form as the web tool, and Generate opens the
 // letter as a new Word document instead of downloading a file. The stage tables are
@@ -79,21 +79,32 @@ export default function FeeProposalPane({ inWord, busy, run }: Props) {
             // project site was empty, so a hit location is not written here.
             project_location: null,
           });
-          void fetchProjectEnrichment(hit.organisation_id, hit.synergy_project_id)
+          void fetchFeeProposalPrefill(hit.organisation_id, hit.synergy_project_id)
             .then((body) => {
               if (linkGeneration.current !== generation) return;
-              const parsed = parseFeeEnrichment(body);
-              if (!parsed.ok) return;
+              const parsed = parseDirectoryPrefill(body);
+              if (!parsed.ok) {
+                dispatch({
+                  type: 'SET_SYNERGY_NOTICE',
+                  generation,
+                  notice: 'The project directory did not return a Client-role prefill. Company, name, and address stay as you left them.',
+                });
+                return;
+              }
               dispatch({
-                type: 'APPLY_SYNERGY_ENRICHMENT',
+                type: 'APPLY_FEE_PREFILL',
                 generation,
-                enrichment: parsed.enrichment,
+                prefill: parsed.prefill,
                 engineer_names: engineersRef.current.map((engineer) => engineer.full_name),
               });
             })
-            .catch(() => {
+            .catch((error: Error) => {
               if (linkGeneration.current !== generation) return;
-              dispatch({ type: 'SET_SYNERGY_NOTICE', generation, notice: CLIENT_ROLE_SOURCE_NOTICE });
+              dispatch({
+                type: 'SET_SYNERGY_NOTICE',
+                generation,
+                notice: error.message || 'The project directory did not return a Client-role prefill. Company, name, and address stay as you left them.',
+              });
             });
         }}
         onUnlink={() => {

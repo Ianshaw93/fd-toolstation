@@ -1,6 +1,5 @@
-// Shared Total Synergy project directory client for the Word add-in task pane.
-// Calls the same-origin /synergy/projects endpoints (which in local dev return mock
-// directory hits, and in production proxy to the shared authenticated email-search service).
+// Shared project directory client for the Word add-in task pane.
+// Same-origin routes forward the caller's FD credential. This file never holds a Synergy key.
 
 export interface SynergyProjectHit {
   synergy_project_id: number;
@@ -44,9 +43,8 @@ export async function searchSynergyProjects(
   });
 
   const res = await fetch(`/synergy/projects?${params.toString()}`, {
-    headers: {
-      Accept: 'application/json',
-    },
+    headers: { Accept: 'application/json' },
+    credentials: 'include',
   });
 
   if (!res.ok) {
@@ -64,13 +62,18 @@ export async function searchSynergyProjects(
  * Logs when a signed-in user selects/opens a Synergy directory row.
  * Returns 204 No Content. Does not create or mutate anything in Synergy.
  */
-export async function fetchProjectEnrichment(orgId: number, projectId: number): Promise<unknown> {
-  const res = await fetch(`/synergy/projects/${orgId}/${projectId}/enrichment`, {
+export async function fetchFeeProposalPrefill(orgId: number, projectId: number): Promise<unknown> {
+  const res = await fetch(`/synergy/projects/${orgId}/${projectId}/fee-proposal-prefill`, {
     headers: { Accept: 'application/json' },
+    credentials: 'include',
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    const error = new Error(err.message || `Client role was not loaded (${res.status})`) as Error & { status?: number };
+    const error = new Error(
+      res.status === 401
+        ? 'Sign in with your FD account to load the Client role from the project directory.'
+        : err.message || `Client role was not loaded (${res.status})`,
+    ) as Error & { status?: number };
     error.status = res.status;
     throw error;
   }
