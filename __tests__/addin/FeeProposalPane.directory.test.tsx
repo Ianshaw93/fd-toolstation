@@ -54,7 +54,8 @@ describe('Word fee pane: choosing 0406 fills the Client-role company', () => {
     for (const line of ['The Dock', 'Station road', 'Kings Langley', 'Hertfordshire', 'WD4 8LZ', 'United Kingdom']) {
       expect(screen.getByDisplayValue(line)).toBeInTheDocument();
     }
-    expect(screen.getByRole('status')).toHaveTextContent(/home address slot/i);
+    expect(screen.getByTestId('address-review')).toHaveTextContent(/home address slot/i);
+    expect(screen.queryByRole('status')).toBeNull();
 
     const directoryCalls = fetchMock.mock.calls.filter(([url]) => new URL(url, 'http://localhost').pathname.startsWith('/v1/'));
     expect(directoryCalls).toHaveLength(3);

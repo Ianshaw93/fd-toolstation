@@ -247,7 +247,8 @@ describe('useFeeProposal with the project directory', () => {
     expect(fee_options.engineer_name).toBe('');
     expect(fee_options.pii_limit).toBe(100000);
     expect(fee_options.include_hourly_rates).toBe(false);
-    expect(result.current.state.client_role_notice).toMatch(/home address slot/i);
+    expect(result.current.state.directory_review).toEqual(['home_slot_on_company_record', 'hasAddress_false']);
+    expect(result.current.state.client_role_notice).toBeNull();
   });
 
   it('never touches engineer, location, PII or hourly rates, even if the user set them', () => {

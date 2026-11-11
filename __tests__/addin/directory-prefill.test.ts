@@ -45,7 +45,8 @@ describe('shared applyFeeProposalPrefill on the documented payload', () => {
     expect(merged.values.projectCountry).toBe('EW');
     expect(merged.skipped).toContainEqual({ field: 'projectCountry', reason: 'unrecognised' });
     expect(merged.needsReview).toEqual([{ field: 'clientAddressLines', review: ['home_slot_on_company_record', 'hasAddress_false'] }]);
-    expect(prefillNotice(served0406(), merged.needsReview)).toMatch(/home address slot/i);
+    // The address field itself shows why it needs review; the client notice stays quiet.
+    expect(prefillNotice(served0406(), merged.needsReview)).toBeNull();
   });
 
   it('applies the documented Wales country as EW', () => {
