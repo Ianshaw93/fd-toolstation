@@ -6,7 +6,8 @@
 // redirects to Microsoft when the user presses Sign in.
 
 import type { Configuration } from '@azure/msal-browser';
-import { fixtureToken, FD_TENANT_ID, setDirectoryAccessTokenProvider } from './directory-auth';
+import { fixtureAccount, fixtureToken, FD_TENANT_ID, setDirectoryAccessTokenProvider } from './directory-auth';
+import type { FdAccount } from './engineer-identity';
 import { DirectoryError, FD_DIRECTORY_SCOPE, FD_SHARED_CLIENT_ID, msalAccessTokenProvider } from './vendor/fd-directory-client';
 
 export type FdSignInState = 'checking' | 'signed_in' | 'needs_sign_in' | 'unavailable';
@@ -14,12 +15,15 @@ export type FdSignInState = 'checking' | 'signed_in' | 'needs_sign_in' | 'unavai
 export interface FdSignIn {
   state: FdSignInState;
   reason: string | null;
+  /** The MSAL account once signed in; null otherwise. */
+  account: FdAccount | null;
   signIn: () => Promise<FdSignInState>;
 }
 
 interface Account {
   homeAccountId: string;
   username: string;
+  name?: string;
 }
 
 interface TokenResult {
@@ -63,10 +67,16 @@ export interface StartOptions {
 export async function startFdSignIn(options: StartOptions): Promise<FdSignIn> {
   setDirectoryAccessTokenProvider(null);
   if (fixtureToken()) {
-    return { state: 'signed_in', reason: 'Fixture token (development only).', signIn: async () => 'signed_in' };
+    const fixture = fixtureAccount();
+    return {
+      state: 'signed_in',
+      reason: 'Fixture token (development only).',
+      account: fixture ? { key: 'fixture', ...fixture } : null,
+      signIn: async () => 'signed_in',
+    };
   }
   if (options.host === 'word' && !options.nestedAppAuth) {
-    return { state: 'unavailable', reason: NESTED_APP_AUTH_UNAVAILABLE, signIn: async () => 'unavailable' };
+    return { state: 'unavailable', reason: NESTED_APP_AUTH_UNAVAILABLE, account: null, signIn: async () => 'unavailable' };
   }
   const redirectUri = options.redirectUri ?? (typeof window !== 'undefined' ? `${window.location.origin}/addin/word` : '');
   const config = fdMsalConfiguration(redirectUri);
@@ -82,15 +92,24 @@ export async function startFdSignIn(options: StartOptions): Promise<FdSignIn> {
       if (redirect?.account) client.setActiveAccount(redirect.account);
     }
   } catch (error) {
-    return { state: 'unavailable', reason: msalFailure(error), signIn: async () => 'unavailable' };
+    return { state: 'unavailable', reason: msalFailure(error), account: null, signIn: async () => 'unavailable' };
   }
 
   const account = () => client.getActiveAccount() ?? client.getAllAccounts()[0] ?? undefined;
-  const provider = msalAccessTokenProvider(client, account);
+  // The shared provider returns only the access token; keep the account MSAL returned with it.
+  const recording = {
+    acquireTokenSilent: async (request: { scopes: string[]; account?: never }) => {
+      const token = await client.acquireTokenSilent(request);
+      if (token.account) client.setActiveAccount(token.account);
+      return token;
+    },
+  };
+  const provider = msalAccessTokenProvider(recording, account);
 
-  const result: FdSignIn = { state: 'checking', reason: null, signIn: async () => result.state };
+  const result: FdSignIn = { state: 'checking', reason: null, account: null, signIn: async () => result.state };
 
   const trySilent = async (): Promise<FdSignInState> => {
+    result.account = null;
     if (options.host === 'preview' && !account()) return 'needs_sign_in';
     try {
       await provider();
@@ -101,6 +120,7 @@ export async function startFdSignIn(options: StartOptions): Promise<FdSignIn> {
     }
     const signedIn = account();
     if (signedIn) client.setActiveAccount(signedIn);
+    result.account = signedIn ? { key: signedIn.homeAccountId, username: signedIn.username, name: signedIn.name ?? null } : null;
     setDirectoryAccessTokenProvider(provider);
     return 'signed_in';
   };

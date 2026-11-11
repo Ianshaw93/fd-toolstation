@@ -17,6 +17,7 @@ import { outcomeNotice, pollFeeProposalPrefill } from '../../lib/directory-prefi
 import type { FdSignIn } from '../../lib/fd-msal';
 import { fetchFeeProposalPrefill } from '../../lib/synergy-api';
 import type { DirectoryProject } from '../../lib/vendor/fd-directory-client';
+import { engineerForAccount } from '../../lib/engineer-identity';
 
 // The fee proposal inside Word: the same form as the web tool, and Generate opens the
 // letter as a new Word document instead of downloading a file. The stage tables are
@@ -38,6 +39,16 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
     fetchEngineersViaProxy().then(setEngineers).catch(() => setEngineers([]));
     return () => lookup.current?.abort();
   }, []);
+
+  const account = signIn?.state === 'signed_in' ? signIn.account : null;
+  const accountEngineer = engineerForAccount(account, engineers);
+  // Waits for the engineer list, so a signed-in person on the list is never treated as unknown.
+  const engineersReady = engineers.length > 0;
+  const accountKey = account?.key ?? null;
+  useEffect(() => {
+    if (accountKey && !engineersReady) return;
+    dispatch({ type: 'APPLY_ACCOUNT_ENGINEER', accountKey, engineer: accountEngineer });
+  }, [accountKey, accountEngineer, engineersReady, dispatch]);
 
   const linkProject = (project: DirectoryProject) => {
     lookup.current?.abort();
@@ -102,6 +113,11 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
       </CollapsibleSection>
       <CollapsibleSection title="Fee Options" dense defaultOpen={true}>
         <FeeOptionsSection feeOptions={state.fee_options} engineers={engineers} dispatch={dispatch} />
+        {account && engineersReady && !accountEngineer && !state.fee_options.engineer_name && (
+          <p className="mt-2 text-xs text-gray-600">
+            {account.name || account.username} is not on the engineer list, so no engineer was chosen. Pick one above.
+          </p>
+        )}
       </CollapsibleSection>
       <CollapsibleSection title="Design Stages: RIBA 1-4" dense defaultOpen={true}>
         <StageCards

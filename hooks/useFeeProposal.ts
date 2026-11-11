@@ -16,6 +16,7 @@ import type {
   ServiceKey6,
 } from '../lib/fee-types';
 import { defaultServiceConfig } from '../lib/fee-constants';
+import { splitAddressLines } from '../lib/address-format';
 import { prefillNotice } from '../lib/directory-prefill';
 import {
   applyFeeProposalPrefill,
@@ -36,6 +37,12 @@ interface FeeProposalState {
   /** What the shared prefill merge last wrote, so it can tell those values from the user's. */
   directory_applied: Partial<PrefillTarget>;
   client_role_notice: string | null;
+  /**
+   * Who set the engineer: nobody yet, the signed-in account (engineer_account says which), or
+   * the user (including a seeded form). Only an automatic engineer follows the account.
+   */
+  engineer_source: 'empty' | 'account' | 'user';
+  engineer_account: string | null;
 }
 
 export type FeeProposalSnapshot = FeeProposalState;
@@ -48,6 +55,8 @@ type Action =
   | { type: 'LINK_DIRECTORY_PROJECT'; project: DirectoryProject }
   | { type: 'APPLY_DIRECTORY_PREFILL'; prefill: FeeProposalPrefill }
   | { type: 'SET_DIRECTORY_NOTICE'; ref: string; notice: string }
+  /** The signed-in account changed (null: signed out) and this fee-list engineer matches it, if any. */
+  | { type: 'APPLY_ACCOUNT_ENGINEER'; accountKey: string | null; engineer: string | null }
   | { type: 'UNLINK_SYNERGY_PROJECT' }
   | { type: 'SET_FEE_OPTIONS'; field: keyof FeeOptions; value: string | number | boolean }
   | { type: 'SET_SERVICE_1_4'; key: ServiceKey1to4; field: keyof ServiceConfig; value: boolean | number | string | null }
@@ -70,6 +79,8 @@ function initialState(): FeeProposalState {
     synergy_project_ref: null,
     directory_applied: {},
     client_role_notice: null,
+    engineer_source: 'empty',
+    engineer_account: null,
     fee_options: { engineer_name: '', pii_limit: 100000, include_hourly_rates: false },
     design_stages_1_4: {
       stage_1: defaultServiceConfig(),
@@ -123,6 +134,15 @@ function prefillTarget(state: FeeProposalState): PrefillTarget {
   };
 }
 
+function withSplitAddress(prefill: FeeProposalPrefill): FeeProposalPrefill {
+  const address = prefill.fields.clientAddressLines;
+  if (!Array.isArray(address.value)) return prefill;
+  return {
+    ...prefill,
+    fields: { ...prefill.fields, clientAddressLines: { ...address, value: splitAddressLines(address.value) } },
+  };
+}
+
 function writePrefillTarget(state: FeeProposalState, values: PrefillTarget, applied: Partial<PrefillTarget>): FeeProposalState {
   const country = values.projectCountry as CountryCode;
   const countryChanged = country !== state.project.country;
@@ -148,8 +168,11 @@ function writePrefillTarget(state: FeeProposalState, values: PrefillTarget, appl
 
 function reducer(state: FeeProposalState, action: Action): FeeProposalState {
   switch (action.type) {
-    case 'HYDRATE':
-      return { ...initialState(), ...action.state };
+    case 'HYDRATE': {
+      const hydrated = { ...initialState(), ...action.state };
+      if (hydrated.engineer_source === 'account') return hydrated;
+      return { ...hydrated, engineer_source: hydrated.fee_options.engineer_name ? 'user' : 'empty', engineer_account: null };
+    }
 
     case 'SET_CLIENT':
       return { ...state, client: { ...state.client, [action.field]: action.value } };
@@ -201,16 +224,39 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
 
     case 'APPLY_DIRECTORY_PREFILL': {
       if (!state.synergy_project_ref || action.prefill.project.id !== state.synergy_project_ref) return state;
+      // Split before merging so `applied` holds the lines as shown and edit protection compares them.
+      const prefill = withSplitAddress(action.prefill);
       const merged = applyFeeProposalPrefill({
         current: prefillTarget(state),
         defaults: PREFILL_DEFAULTS,
-        prefill: action.prefill,
+        prefill,
         previouslyApplied: state.directory_applied,
         selectedRef: state.synergy_project_ref,
       });
+      const lines = merged.applied.clientAddressLines;
+      const overflow =
+        lines && lines.length > PREFILL_DEFAULTS.clientAddressLines.length
+          ? `The imported address has ${lines.length} lines, more than the usual six. All are kept below; check them before sending.`
+          : null;
+      const notice = [prefillNotice(prefill, merged.needsReview), overflow].filter(Boolean).join(' ');
       return {
         ...writePrefillTarget(state, merged.values, merged.applied),
-        client_role_notice: prefillNotice(action.prefill, merged.needsReview),
+        client_role_notice: notice || null,
+      };
+    }
+
+    case 'APPLY_ACCOUNT_ENGINEER': {
+      if (state.engineer_source === 'user') return state;
+      if (state.engineer_source === 'empty' && state.fee_options.engineer_name) return { ...state, engineer_source: 'user' };
+      if (state.engineer_source === 'account' && state.engineer_account === action.accountKey && state.fee_options.engineer_name === action.engineer) {
+        return state;
+      }
+      const engineer = action.accountKey ? action.engineer : null;
+      return {
+        ...state,
+        fee_options: { ...state.fee_options, engineer_name: engineer ?? '' },
+        engineer_source: engineer ? 'account' : 'empty',
+        engineer_account: engineer ? action.accountKey : null,
       };
     }
 
@@ -233,7 +279,11 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
       };
 
     case 'SET_FEE_OPTIONS':
-      return { ...state, fee_options: { ...state.fee_options, [action.field]: action.value } };
+      return {
+        ...state,
+        fee_options: { ...state.fee_options, [action.field]: action.value },
+        ...(action.field === 'engineer_name' ? { engineer_source: 'user' as const, engineer_account: null } : {}),
+      };
 
     case 'SET_SERVICE_1_4':
       return {

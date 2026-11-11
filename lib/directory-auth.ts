@@ -25,6 +25,15 @@ export function fixtureToken(): string | null {
   return typeof token === 'string' ? token : null;
 }
 
+/** Browser fixture runs only: the signed-in identity that goes with fixtureToken(). */
+export function fixtureAccount(): { username: string; name: string | null } | null {
+  if (!fixtureToken()) return null;
+  const account = (window as unknown as { __FD_DIRECTORY_FIXTURE_ACCOUNT__?: unknown }).__FD_DIRECTORY_FIXTURE_ACCOUNT__;
+  if (typeof account !== 'object' || account === null) return null;
+  const { username, name } = account as { username?: unknown; name?: unknown };
+  return typeof username === 'string' ? { username, name: typeof name === 'string' ? name : null } : null;
+}
+
 function activeProvider(): DirectoryAccessTokenProvider | null {
   if (registered) return registered;
   const token = fixtureToken();

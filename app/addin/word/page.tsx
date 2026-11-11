@@ -102,7 +102,7 @@ export default function WordAddinPage() {
 
   const say = useCallback((line: string) => setLog((prev) => [line, ...prev].slice(0, 12)), []);
 
-  const [signIn, setSignIn] = useState<FdSignIn>({ state: 'checking', reason: null, signIn: async () => 'checking' });
+  const [signIn, setSignIn] = useState<FdSignIn>({ state: 'checking', reason: null, account: null, signIn: async () => 'checking' });
   useEffect(() => {
     if (host === 'loading') return;
     let cancelled = false;
@@ -111,6 +111,7 @@ export default function WordAddinPage() {
       setSignIn({
         state: result.state,
         reason: result.reason,
+        account: result.account,
         signIn: async (): Promise<FdSignInState> => {
           const state = await result.signIn();
           publish(result);

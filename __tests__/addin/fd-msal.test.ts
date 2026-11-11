@@ -22,9 +22,9 @@ function fakeClient(overrides: Partial<FdMsalClient> = {}): FdMsalClient & { cal
     setActiveAccount: (account: unknown) => {
       active = account;
     },
-    acquireTokenSilent: async (request: unknown) => {
+    acquireTokenSilent: async (request: { account?: unknown }) => {
       calls.silent.push(request);
-      return { accessToken: fixtureAccessToken(), idToken: 'id-token-not-used', account: ACCOUNT };
+      return { accessToken: fixtureAccessToken(), idToken: 'id-token-not-used', account: (request.account as typeof ACCOUNT) ?? ACCOUNT };
     },
     acquireTokenPopup: async (request: unknown) => {
       calls.popup.push(request);
@@ -132,13 +132,13 @@ describe('FD Microsoft sign-in for the Word pane', () => {
       const fixture = await startFdSignIn({ host: 'preview', nestedAppAuth: false, createNested: jest.fn(), createStandard });
       expect(fixture.state).toBe('signed_in');
       expect(fixture.account).toBeNull();
+      expect(createStandard).toHaveBeenCalledTimes(1);
       (window as unknown as Record<string, unknown>).__FD_DIRECTORY_FIXTURE_ACCOUNT__ = { username: 'sam@firedynamicsgroup.com', name: 'Sam Bennett' };
       const named = await startFdSignIn({ host: 'preview', nestedAppAuth: false, createNested: jest.fn(), createStandard });
       expect(named.account).toEqual({ key: 'fixture', username: 'sam@firedynamicsgroup.com', name: 'Sam Bennett' });
       (process.env as Record<string, string>).NODE_ENV = 'production';
       const productionNamed = await startFdSignIn({ host: 'preview', nestedAppAuth: false, createNested: jest.fn(), createStandard });
       expect(productionNamed.account).toBeNull();
-      expect(createStandard).toHaveBeenCalledTimes(1);
     } finally {
       (process.env as Record<string, string>).NODE_ENV = previous as string;
       delete (window as unknown as Record<string, unknown>).__FD_DIRECTORY_FIXTURE_TOKEN__;
