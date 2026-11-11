@@ -273,7 +273,7 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         lines && lines.length > PREFILL_DEFAULTS.clientAddressLines.length
           ? `The imported address has ${lines.length} lines, more than the usual six. All are kept below; check them before sending.`
           : null;
-      const notice = [prefillNotice(prefill, merged.needsReview), overflow].filter(Boolean).join(' ');
+      const notice = [prefillNotice(prefill), overflow].filter(Boolean).join(' ');
       const addressReview = merged.needsReview.find((item) => item.field === 'clientAddressLines')?.review ?? [];
       return {
         ...writePrefillTarget(state, merged.values, carryKept(state.directory_applied, merged)),

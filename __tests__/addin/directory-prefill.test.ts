@@ -46,7 +46,7 @@ describe('shared applyFeeProposalPrefill on the documented payload', () => {
     expect(merged.skipped).toContainEqual({ field: 'projectCountry', reason: 'unrecognised' });
     expect(merged.needsReview).toEqual([{ field: 'clientAddressLines', review: ['home_slot_on_company_record', 'hasAddress_false'] }]);
     // The address field itself shows why it needs review; the client notice stays quiet.
-    expect(prefillNotice(served0406(), merged.needsReview)).toBeNull();
+    expect(prefillNotice(served0406())).toBeNull();
   });
 
   it('applies the documented Wales country as EW', () => {
@@ -63,19 +63,19 @@ describe('shared applyFeeProposalPrefill on the documented payload', () => {
 
 describe('prefill notices', () => {
   it('says the lookup is pending', () => {
-    expect(prefillNotice(pending0406(), [])).toBe(CLIENT_LOOKUP_PENDING_NOTICE);
+    expect(prefillNotice(pending0406())).toBe(CLIENT_LOOKUP_PENDING_NOTICE);
   });
 
   it('explains each documented client status without guessing a client', () => {
     const body = served0406();
     body.client = { ...body.client, status: 'no_client_role', displayName: null };
-    expect(prefillNotice(body, [])).toMatch(/no Client role/i);
+    expect(prefillNotice(body)).toMatch(/no Client role/i);
     body.client = { ...body.client, status: 'multiple_client_roles', candidates: [{ projectContactId: 1, contactId: 2, name: 'A Ltd' }, { projectContactId: 3, contactId: 4, name: 'B Ltd' }] };
-    expect(prefillNotice(body, [])).toMatch(/A Ltd.*B Ltd/);
+    expect(prefillNotice(body)).toMatch(/A Ltd.*B Ltd/);
     body.client = { ...body.client, status: 'contact_detail_missing' };
-    expect(prefillNotice(body, [])).toMatch(/could not be read/i);
+    expect(prefillNotice(body)).toMatch(/could not be read/i);
     body.client = { ...body.client, lookup: 'failed', status: null, errorCode: 'synergy_timeout' };
-    expect(prefillNotice(body, [])).toMatch(/failed.*synergy_timeout/i);
+    expect(prefillNotice(body)).toMatch(/failed.*synergy_timeout/i);
   });
 });
 

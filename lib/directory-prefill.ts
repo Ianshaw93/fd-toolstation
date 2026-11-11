@@ -4,7 +4,7 @@
 // to tell the user. The worker fetches the Client role after the first request, so the pane asks
 // again with backoff while client.lookup is "pending" and gives up to manual entry.
 
-import { DirectoryError, type DirectoryErrorCode, type FeeProposalPrefill, type PrefillField } from './vendor/fd-directory-client';
+import { DirectoryError, type DirectoryErrorCode, type FeeProposalPrefill } from './vendor/fd-directory-client';
 
 export const CLIENT_LOOKUP_PENDING_NOTICE =
   'Looking up the Client role for this project. Company and address fill in when it finishes; anything you type is kept.';
@@ -33,23 +33,16 @@ export function isFeeProposalPrefillV1(body: unknown): body is FeeProposalPrefil
   return FIELD_KEYS.every((key) => isRecord(fields[key]) && typeof fields[key].status === 'string' && 'value' in fields[key]);
 }
 
-type Review = NonNullable<PrefillField<unknown>['review']>;
-
-export function prefillNotice(prefill: FeeProposalPrefill, needsReview: Array<{ field: string; review: Review }>): string | null {
+export function prefillNotice(prefill: FeeProposalPrefill): string | null {
   const { client } = prefill;
   if (client.lookup === 'pending') return CLIENT_LOOKUP_PENDING_NOTICE;
   if (client.lookup === 'failed') {
     return `The Client lookup failed${client.errorCode ? ` (${client.errorCode})` : ''}. Fill in the company, name, and address by hand.`;
   }
   switch (client.status) {
-    case 'found': {
-      const address = needsReview.find((item) => item.field === 'clientAddressLines');
-      if (!address) return null;
-      const why: string[] = [];
-      if (address.review.includes('home_slot_on_company_record')) why.push('it is in the company record’s home address slot');
-      if (address.review.includes('hasAddress_false')) why.push('Synergy marks it as not a full address');
-      return `Check the client address before sending: ${why.join(' and ') || 'Synergy flagged it for review'}.`;
-    }
+    case 'found':
+      // Review reasons are shown on the address field itself (field-provenance).
+      return null;
     case 'no_client_role':
       return 'This project has no Client role in Synergy. Fill in the company, name, and address by hand.';
     case 'multiple_client_roles': {
