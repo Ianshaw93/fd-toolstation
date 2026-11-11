@@ -31,7 +31,7 @@ function fromSynergy(current: unknown, applied: unknown): Provenance | null {
 
 export function fieldProvenance(state: FeeProposalSnapshot): FieldProvenance {
   const applied = state.directory_applied;
-  const { client, project, fee_options } = state;
+  const { client, project } = state;
 
   let address = fromSynergy(client.address_lines, applied.clientAddressLines);
   if (address?.kind === 'synergy' && state.directory_review.length) address = { kind: 'synergy', review: state.directory_review };
