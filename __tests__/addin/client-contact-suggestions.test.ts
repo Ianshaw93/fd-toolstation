@@ -1,59 +1,64 @@
 import { readContactSuggestions } from '../../lib/client-contact-suggestions';
-import { served0406, served0406WithContacts, TAYLOR_WIMPEY_PEOPLE } from '../../test-fixtures/directory-contract-v1';
+import { applyContactSuggestion, type PrefillTarget } from '../../lib/vendor/fd-directory-client';
+import { pending0406, served0406, served0406WithContacts, TAYLOR_WIMPEY_PEOPLE, withCompanyContacts } from '../../test-fixtures/directory-contract-v1';
 
-type Body = ReturnType<typeof served0406WithContacts>;
+describe('company contacts from client.companyContacts / client.contactSuggestions (c120cec)', () => {
+  it('offers the three Taylor Wimpey North Thames people once the company lookup is done', () => {
+    const read = readContactSuggestions(served0406WithContacts());
+    expect(read.lookup).toBe('done');
+    expect(read.companyName).toBe('Taylor Wimpey North Thames');
+    expect(read.people.map((p) => [p.id, p.displayName, p.firstName, p.lastName])).toEqual([
+      [12655215, 'Louie Sharp', 'Louie', 'Sharp'],
+      [11518910, 'Matt Christensen', 'Matt', 'Christensen'],
+      [12557134, 'Tyler Watkins', 'Tyler', 'Watkins'],
+    ]);
+    expect(read.truncated).toBe(false);
+  });
 
-function withPeople(people: unknown[], mutate?: (body: Body) => void): Body {
-  const body = served0406();
-  (body.client as unknown as { contactSuggestions: unknown[] }).contactSuggestions = people;
-  mutate?.(body);
-  return body;
-}
-
-describe('company contact suggestions (proposed client.contactSuggestions)', () => {
-  it('reads the three Taylor Wimpey North Thames people with their structured names', () => {
-    expect(readContactSuggestions(served0406WithContacts())).toEqual({
-      companyName: 'Taylor Wimpey North Thames',
-      people: [
-        { id: 12655215, displayName: 'Louie Sharp', firstName: 'Louie', lastName: 'Sharp' },
-        { id: 11518910, displayName: 'Matt Christensen', firstName: 'Matt', lastName: 'Christensen' },
-        { id: 12557134, displayName: 'Tyler Watkins', firstName: 'Tyler', lastName: 'Watkins' },
-      ],
+  it('reports pending, failed and not_applicable with no people', () => {
+    expect(readContactSuggestions(served0406())).toMatchObject({ lookup: 'pending', people: [] });
+    expect(readContactSuggestions(withCompanyContacts(served0406(), { lookup: 'failed', errorCode: 'synergy_timeout' }))).toMatchObject({
+      lookup: 'failed',
+      errorCode: 'synergy_timeout',
+      people: [],
     });
+    expect(readContactSuggestions(pending0406())).toMatchObject({ lookup: 'not_applicable', people: [] });
   });
 
-  it('is empty when the field is absent, so names stay manual', () => {
-    expect(readContactSuggestions(served0406())).toEqual({ companyName: 'Taylor Wimpey North Thames', people: [] });
+  it('ignores people sent with any lookup other than done', () => {
+    const body = withCompanyContacts(served0406(), { lookup: 'pending' }, TAYLOR_WIMPEY_PEOPLE);
+    expect(readContactSuggestions(body).people).toEqual([]);
   });
 
-  it('keeps only active company people whose company is the found Client', () => {
+  it('keeps the truncated flag', () => {
+    const body = withCompanyContacts(served0406(), { lookup: 'done', truncated: true }, TAYLOR_WIMPEY_PEOPLE);
+    expect(readContactSuggestions(body)).toMatchObject({ truncated: true });
+    expect(readContactSuggestions(body).people).toHaveLength(3);
+  });
+
+  it('drops anyone not at the Client company or not marked as a company contact', () => {
     const [louie, matt, tyler] = TAYLOR_WIMPEY_PEOPLE;
-    const body = withPeople([
+    const body = withCompanyContacts(served0406(), { lookup: 'done' }, [
       louie,
       { ...matt, companyId: 999 },
-      { ...tyler, association: 'project' },
-      { ...tyler, id: 5, isActive: false },
-      { ...tyler, id: 6, source: 'project-emails' },
-      { ...tyler, id: 7, firstName: null, lastName: null },
-      'not a person',
+      { ...tyler, association: 'project' as never },
     ]);
     expect(readContactSuggestions(body).people.map((p) => p.id)).toEqual([12655215]);
   });
 
-  it('offers no people unless the Client lookup found the company', () => {
-    const body = withPeople(TAYLOR_WIMPEY_PEOPLE, (b) => {
-      b.client = { ...b.client, status: 'multiple_client_roles' };
-    });
-    expect(readContactSuggestions(body).people).toEqual([]);
-  });
-
-  it('does not split a display name when a name part is missing', () => {
-    const body = withPeople([{ ...TAYLOR_WIMPEY_PEOPLE[0], lastName: null }]);
-    expect(readContactSuggestions(body).people).toEqual([{ id: 12655215, displayName: 'Louie Sharp', firstName: 'Louie', lastName: '' }]);
-  });
-
-  it('never carries contact details through', () => {
-    const body = withPeople([{ ...TAYLOR_WIMPEY_PEOPLE[0], email: 'x@y', phone: '1', addressHome: { address1: 'z' } }]);
-    expect(Object.keys(readContactSuggestions(body).people[0]).sort()).toEqual(['displayName', 'firstName', 'id', 'lastName']);
+  it('keeps a missing name part missing, and the shared pick leaves it empty instead of splitting', () => {
+    const louie = { ...TAYLOR_WIMPEY_PEOPLE[0], lastName: null };
+    const body = withCompanyContacts(served0406(), { lookup: 'done' }, [louie]);
+    const [person] = readContactSuggestions(body).people;
+    expect(person.lastName).toBeNull();
+    const form: PrefillTarget = {
+      projectName: 'P',
+      projectCountry: 'EW',
+      clientFirstName: 'Typed',
+      clientSurname: 'Name',
+      clientCompanyName: 'Taylor Wimpey North Thames',
+      clientAddressLines: ['The Dock', '', '', '', '', ''],
+    };
+    expect(applyContactSuggestion(form, person)).toEqual({ ...form, clientFirstName: 'Louie', clientSurname: '' });
   });
 });

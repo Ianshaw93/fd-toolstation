@@ -1,7 +1,12 @@
-// Payloads copied from fd-project-directory docs/api.md at 63b3d48 (PR #2).
+// Payloads copied from fd-project-directory docs/api.md at 63b3d48 (PR #2), with the
+// client.companyContacts / client.contactSuggestions fields added at c120cec (src/client/index.ts).
 // SERVED is the documented container e2e response: the client block and client fields are the
 // sanitized 0406 payload, project / site / manager are the directory's mock project.
-import type { DirectoryProject, FeeProposalPrefill, SearchResult } from '../lib/vendor/fd-directory-client';
+import type { ContactSuggestion, DirectoryProject, FeeProposalPrefill, SearchResult } from '../lib/vendor/fd-directory-client';
+
+type CompanyContacts = FeeProposalPrefill['client']['companyContacts'];
+
+const COMPANY_CONTACTS_PENDING: CompanyContacts = { lookup: 'pending', companyId: 11518909, fetchedAt: null, errorCode: null, truncated: false };
 
 export const SERVED_REF = 'synergy:5466:10002';
 
@@ -32,6 +37,8 @@ export function served(): FeeProposalPrefill {
     client: {
       lookup: 'done', fetchedAt: '2026-11-11T17:56:19.298Z', errorCode: null, status: 'found',
       projectContactId: 18708053, contactId: 11518909, displayName: 'Taylor Wimpey North Thames', candidates: [],
+      companyContacts: { ...COMPANY_CONTACTS_PENDING },
+      contactSuggestions: [],
     },
   };
 }
@@ -44,7 +51,11 @@ export function pending(): FeeProposalPrefill {
   body.fields.clientSurname = { ...lookupPending };
   body.fields.clientCompanyName = { ...lookupPending };
   body.fields.clientAddressLines = { ...lookupPending };
-  body.client = { lookup: 'pending', fetchedAt: null, errorCode: null, status: null, projectContactId: null, contactId: null, displayName: null, candidates: [] };
+  body.client = {
+    lookup: 'pending', fetchedAt: null, errorCode: null, status: null, projectContactId: null, contactId: null, displayName: null, candidates: [],
+    companyContacts: { lookup: 'not_applicable', companyId: null, fetchedAt: null, errorCode: null, truncated: false },
+    contactSuggestions: [],
+  };
   return body;
 }
 
@@ -122,19 +133,30 @@ export function fixtureAccessToken(claims: Record<string, unknown> = {}): string
 }
 
 /**
- * PROPOSED additive field, not yet in the directory contract: client.contactSuggestions.
- * People are the three active Personnel whose formal parentContactId is the 0406 Client company
- * (Contacts/Index criteria.parentContactId=11518909, captured 2026-11-11). None is a 0406
- * project contact. Test fixture only; not live data.
+ * The three active Personnel whose formal parentContactId is the 0406 Client company
+ * (Synergy Contacts/Index criteria.parentContactId=11518909, captured 2026-11-11). None is a 0406
+ * project contact. Test fixture only; not live directory output.
  */
-export const TAYLOR_WIMPEY_PEOPLE = [
+export const TAYLOR_WIMPEY_PEOPLE: ContactSuggestion[] = [
   { id: 12655215, displayName: 'Louie Sharp', firstName: 'Louie', lastName: 'Sharp' },
   { id: 11518910, displayName: 'Matt Christensen', firstName: 'Matt', lastName: 'Christensen' },
   { id: 12557134, displayName: 'Tyler Watkins', firstName: 'Tyler', lastName: 'Watkins' },
-].map((person) => ({ ...person, companyId: 11518909, isActive: true, source: 'total-synergy', association: 'company' }));
+].map((person) => ({ ...person, companyId: 11518909, isActive: true as const, source: 'total-synergy' as const, association: 'company' as const }));
 
-export function served0406WithContacts(): FeeProposalPrefill {
-  const body = served0406();
-  (body.client as unknown as { contactSuggestions: unknown[] }).contactSuggestions = TAYLOR_WIMPEY_PEOPLE.map((p) => ({ ...p }));
+export function withCompanyContacts(
+  body: FeeProposalPrefill,
+  companyContacts: Partial<CompanyContacts>,
+  people: ContactSuggestion[] = [],
+): FeeProposalPrefill {
+  body.client = {
+    ...body.client,
+    companyContacts: { ...body.client.companyContacts, ...companyContacts },
+    contactSuggestions: people.map((p) => ({ ...p })),
+  };
   return body;
+}
+
+/** Client found, company people served. */
+export function served0406WithContacts(): FeeProposalPrefill {
+  return withCompanyContacts(served0406(), { lookup: 'done', fetchedAt: '2026-11-11T18:42:00.000Z' }, TAYLOR_WIMPEY_PEOPLE);
 }

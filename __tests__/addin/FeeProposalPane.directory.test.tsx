@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import FeeProposalPane from '../../components/addin/FeeProposalPane';
 import { setDirectoryAccessTokenProvider } from '../../lib/directory-auth';
-import { fixtureAccessToken, LABEL_0406, pending0406, project0406, REF_0406, searchPage, served0406, served0406WithContacts } from '../../test-fixtures/directory-contract-v1';
+import { fixtureAccessToken, LABEL_0406, pending0406, project0406, REF_0406, searchPage, served0406, served0406WithContacts, withCompanyContacts } from '../../test-fixtures/directory-contract-v1';
 
 jest.mock('../../lib/word-addin-api', () => ({
   fetchEngineersViaProxy: jest.fn().mockResolvedValue([
@@ -122,7 +122,7 @@ describe('Word fee pane: choosing 0406 fills the Client-role company', () => {
     await userEvent.type(screen.getByPlaceholderText(/Search by job # or name/i), '0406');
     await userEvent.click(await screen.findByText(LABEL_0406));
 
-    const group = await screen.findByRole('group', { name: 'Taylor Wimpey North Thames company contacts' }, { timeout: 5000 });
+    const group = await screen.findByRole('group', { name: 'Total Synergy contacts at Taylor Wimpey North Thames' }, { timeout: 5000 });
     const tags = Array.from(group.querySelectorAll('button')).map((b) => b.textContent);
     expect(tags).toEqual(['Louie Sharp', 'Matt Christensen', 'Tyler Watkins']);
     const firstName = screen.getByLabelText('First Name') as HTMLInputElement;
@@ -155,7 +155,7 @@ describe('Word fee pane: choosing 0406 fills the Client-role company', () => {
     await userEvent.type(screen.getByPlaceholderText(/Search by job # or name/i), '0406');
     await userEvent.click(await screen.findByText(LABEL_0406));
     expect(await screen.findByDisplayValue('Taylor Wimpey North Thames')).toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: /company contacts/ })).toBeNull();
+    expect(screen.queryByRole('group', { name: /Total Synergy contacts/ })).toBeNull();
     expect(screen.getByLabelText('First Name')).toHaveValue('');
   });
 
@@ -191,4 +191,40 @@ describe('Word fee pane: choosing 0406 fills the Client-role company', () => {
     await userEvent.selectOptions(screen.getByDisplayValue('Sam Bennett'), 'Kirsty Cameron');
     expect(screen.getByTestId('source-engineer')).toHaveTextContent('Edited by you');
   }, 10000);
+
+  it('says the company people are loading, then that they could not be loaded, and keeps names typeable', async () => {
+    const prefills = [served0406(), withCompanyContacts(served0406(), { lookup: 'failed', errorCode: 'synergy_timeout' })];
+    global.fetch = jest.fn(async (url: string) => {
+      const path = new URL(url, 'http://localhost').pathname;
+      if (path === '/v1/projects') return json(searchPage([project0406()]));
+      if (path.endsWith('/fee-proposal-prefill')) return json(prefills.shift());
+      return json(null, 204);
+    }) as unknown as typeof fetch;
+    setDirectoryAccessTokenProvider(async () => fixtureAccessToken());
+    render(<FeeProposalPane inWord={false} busy={null} run={jest.fn()} signIn={signedIn} />);
+    await userEvent.type(screen.getByPlaceholderText(/Search by job # or name/i), '0406');
+    await userEvent.click(await screen.findByText(LABEL_0406));
+    expect(await screen.findByTestId('company-contacts-status')).toHaveTextContent(/Looking up people at Taylor Wimpey North Thames/i);
+    expect(await screen.findByText(/could not be loaded \(synergy_timeout\)/i, {}, { timeout: 5000 })).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('First Name'), 'Ada');
+    expect(screen.getByLabelText('First Name')).toHaveValue('Ada');
+  }, 10000);
+
+  it('says when the company people list was cut short', async () => {
+    global.fetch = jest.fn(async (url: string) => {
+      const path = new URL(url, 'http://localhost').pathname;
+      if (path === '/v1/projects') return json(searchPage([project0406()]));
+      if (path.endsWith('/fee-proposal-prefill')) {
+        const body = served0406WithContacts();
+        body.client.companyContacts.truncated = true;
+        return json(body);
+      }
+      return json(null, 204);
+    }) as unknown as typeof fetch;
+    setDirectoryAccessTokenProvider(async () => fixtureAccessToken());
+    render(<FeeProposalPane inWord={false} busy={null} run={jest.fn()} signIn={signedIn} />);
+    await userEvent.type(screen.getByPlaceholderText(/Search by job # or name/i), '0406');
+    await userEvent.click(await screen.findByText(LABEL_0406));
+    expect(await screen.findByTestId('company-contacts-status')).toHaveTextContent(/not everyone at the company is listed/i);
+  });
 });

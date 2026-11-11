@@ -1,5 +1,5 @@
 // Vendored verbatim from Fire-Dynamics-Group/fd-project-directory src/client/index.ts at
-// 63b3d4835ee217980334a487f4928e84d4e9aef6 (PR #2). Do not edit here; update from that source.
+// c120cec8eda7e70d5ff6783d5bff7aead83765e4 (PR #2). Do not edit here; update from that source.
 
 // FD Project Directory client for apps that already sign users in with the shared FD Microsoft
 // registration (Upload Canvas, backendForNextApp, email-search add-in). Self-contained: no imports,
@@ -138,7 +138,45 @@ export interface FeeProposalPrefill {
     contactId: number | null;
     displayName: string | null;
     candidates: Array<{ projectContactId: number | null; contactId: number | null; name: string | null }>;
+    /**
+     * The worker's fetch of the Client company's people. "not_applicable" when there is no single
+     * Client company; `truncated` when the list was cut at the page cap.
+     */
+    companyContacts: {
+      lookup: "not_applicable" | "pending" | "done" | "failed";
+      companyId: number | null;
+      fetchedAt: string | null;
+      errorCode: string | null;
+      truncated: boolean;
+    };
+    /**
+     * People at the Client company, in Synergy's name order, for a name picker. Empty unless
+     * `companyContacts.lookup` is "done". They belong to the company; they are not project contacts.
+     * Never auto-select one; the user may also type their own names.
+     */
+    contactSuggestions: ContactSuggestion[];
   };
+}
+
+/** A person at the Client company (Total Synergy contact linked by parentContactId), not a project assignment. */
+export interface ContactSuggestion {
+  id: number;
+  /** Synergy's own full name. Display only; never split it. */
+  displayName: string;
+  firstName: string | null;
+  lastName: string | null;
+  companyId: number;
+  isActive: true;
+  source: "total-synergy";
+  association: "company";
+}
+
+/**
+ * The form after the user picks a suggestion: first name and surname from its structured fields
+ * (empty when Synergy has none), everything else unchanged. Call it only on a user's pick.
+ */
+export function applyContactSuggestion(current: PrefillTarget, suggestion: ContactSuggestion): PrefillTarget {
+  return { ...current, clientFirstName: suggestion.firstName ?? "", clientSurname: suggestion.lastName ?? "" };
 }
 
 /** The form fields a prefill may set. Engineer, location, PII limit and hourly rates are never touched. */

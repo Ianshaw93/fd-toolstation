@@ -6,7 +6,7 @@ import {
   prefillNotice,
 } from '../../lib/directory-prefill';
 import { applyFeeProposalPrefill, DirectoryError, type PrefillTarget } from '../../lib/vendor/fd-directory-client';
-import { pending, pending0406, served, served0406, SERVED_REF, REF_0406 } from '../../test-fixtures/directory-contract-v1';
+import { pending, pending0406, served, served0406, served0406WithContacts, SERVED_REF, REF_0406, withCompanyContacts } from '../../test-fixtures/directory-contract-v1';
 
 const DEFAULTS: PrefillTarget = {
   projectName: '',
@@ -96,7 +96,7 @@ describe('pollFeeProposalPrefill', () => {
 
   it('asks again with backoff until the lookup is no longer pending', async () => {
     const clock = fakeClock();
-    const bodies = [pending0406(), pending0406(), served0406()];
+    const bodies = [pending0406(), pending0406(), served0406WithContacts()];
     const fetchPrefill = jest.fn(async () => bodies.shift() ?? null);
     const seen: string[] = [];
     const outcome = await pollFeeProposalPrefill(REF_0406, {
@@ -109,6 +109,32 @@ describe('pollFeeProposalPrefill', () => {
     expect(outcome.kind).toBe('done');
     expect(seen).toEqual(['pending', 'pending', 'done']);
     expect(clock.waits[1]).toBeGreaterThan(clock.waits[0]);
+  });
+
+  it('keeps asking while the company people are pending after the Client lookup is done', async () => {
+    const clock = fakeClock();
+    const bodies = [pending0406(), served0406(), served0406(), served0406WithContacts()];
+    const fetchPrefill = jest.fn(async () => bodies.shift() ?? null);
+    const seen: string[] = [];
+    const outcome = await pollFeeProposalPrefill(REF_0406, {
+      fetchPrefill,
+      signal: new AbortController().signal,
+      onResponse: (body) => seen.push(`${body.client.lookup}/${body.client.companyContacts.lookup}`),
+      now: clock.now,
+      sleep: clock.sleep,
+    });
+    expect(outcome.kind).toBe('done');
+    expect(seen).toEqual(['pending/not_applicable', 'done/pending', 'done/pending', 'done/done']);
+  });
+
+  it('stops once the company people lookup has failed or does not apply', async () => {
+    for (const lookup of ['failed', 'not_applicable'] as const) {
+      const clock = fakeClock();
+      const fetchPrefill = jest.fn(async () => withCompanyContacts(served0406(), { lookup }));
+      const outcome = await pollFeeProposalPrefill(REF_0406, { fetchPrefill, signal: new AbortController().signal, onResponse: () => undefined, now: clock.now, sleep: clock.sleep });
+      expect(outcome.kind).toBe('done');
+      expect(fetchPrefill).toHaveBeenCalledTimes(1);
+    }
   });
 
   it('stops on a failed lookup', async () => {
@@ -172,7 +198,7 @@ describe('pollFeeProposalPrefill', () => {
       fetchPrefill: async () => {
         calls += 1;
         if (calls === 1) throw new DirectoryError('network_error');
-        return served0406();
+        return served0406WithContacts();
       },
       signal: new AbortController().signal,
       onResponse: () => undefined,
