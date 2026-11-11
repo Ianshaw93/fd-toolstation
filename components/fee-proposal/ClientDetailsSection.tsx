@@ -21,7 +21,15 @@ export default function ClientDetailsSection({ client, dispatch, showCompany = f
   const addressReview = provenance?.address?.kind === 'synergy' ? provenance.address.review : undefined;
   const id = useId();
   const people = contactSuggestions?.people ?? [];
-  const groupLabel = `${contactSuggestions?.companyName ?? 'Client company'} company contacts`;
+  const company = contactSuggestions?.companyName ?? 'the client company';
+  const groupLabel = `Total Synergy contacts at ${company}`;
+  let contactsStatus: string | null = null;
+  if (contactSuggestions?.lookup === 'pending') contactsStatus = `Looking up people at ${company}. You can type a name meanwhile.`;
+  else if (contactSuggestions?.lookup === 'failed') {
+    contactsStatus = `People at ${company} could not be loaded${contactSuggestions.errorCode ? ` (${contactSuggestions.errorCode})` : ''}. Type a name.`;
+  } else if (contactSuggestions?.lookup === 'done' && contactSuggestions.truncated) {
+    contactsStatus = 'Not everyone at the company is listed. Type a name if yours is missing.';
+  }
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {showCompany && (
@@ -42,12 +50,17 @@ export default function ClientDetailsSection({ client, dispatch, showCompany = f
           </p>
         </div>
       )}
+      {contactsStatus && (
+        <p data-testid="company-contacts-status" role="status" className="md:col-span-2 text-xs text-gray-600">
+          {contactsStatus}
+        </p>
+      )}
       {people.length > 0 && (
         <div className="md:col-span-2">
           <p id={`${id}-people`} className="text-xs font-medium text-gray-700 mb-1">{groupLabel}</p>
           <div role="group" aria-labelledby={`${id}-people`} className="flex flex-wrap gap-1.5">
             {people.map((person) => {
-              const selected = client.first_name === person.firstName && client.surname === person.lastName;
+              const selected = client.first_name === (person.firstName ?? '') && client.surname === (person.lastName ?? '');
               return (
                 <button
                   key={person.id}
@@ -63,7 +76,7 @@ export default function ClientDetailsSection({ client, dispatch, showCompany = f
               );
             })}
           </div>
-          <p className="mt-1 text-xs text-gray-500">People at the company in Synergy, not project contacts. Pick one or type a name.</p>
+          <p className="mt-1 text-xs text-gray-500">People at the client company in Total Synergy, not project contacts. Pick one or type a name.</p>
         </div>
       )}
       <div>

@@ -20,6 +20,7 @@ import { splitAddressLines } from '../lib/address-format';
 import { NO_CONTACT_SUGGESTIONS, readContactSuggestions, type ContactSuggestions } from '../lib/client-contact-suggestions';
 import { prefillNotice } from '../lib/directory-prefill';
 import {
+  applyContactSuggestion,
   applyFeeProposalPrefill,
   type DirectoryProject,
   type FeeProposalPrefill,
@@ -291,10 +292,11 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
     case 'PICK_CLIENT_CONTACT': {
       const person = state.contact_suggestions.people.find((candidate) => candidate.id === action.contactId);
       if (!person) return state;
+      const picked = applyContactSuggestion(prefillTarget(state), person);
       return {
         ...state,
-        client: { ...state.client, first_name: person.firstName, surname: person.lastName },
-        client_contact_pick: { contactId: person.id, firstName: person.firstName, lastName: person.lastName },
+        client: { ...state.client, first_name: picked.clientFirstName, surname: picked.clientSurname },
+        client_contact_pick: { contactId: person.id, firstName: picked.clientFirstName, lastName: picked.clientSurname },
       };
     }
 

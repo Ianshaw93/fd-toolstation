@@ -4,6 +4,7 @@
 // to tell the user. The worker fetches the Client role after the first request, so the pane asks
 // again with backoff while client.lookup is "pending" and gives up to manual entry.
 
+import { companyContactsPending } from './client-contact-suggestions';
 import { DirectoryError, type DirectoryErrorCode, type FeeProposalPrefill } from './vendor/fd-directory-client';
 
 export const CLIENT_LOOKUP_PENDING_NOTICE =
@@ -105,7 +106,8 @@ export async function pollFeeProposalPrefill(ref: string, options: PollOptions):
       if (body === null) return { kind: 'not_found' };
       if (!isFeeProposalPrefillV1(body) || body.project.id !== ref) return { kind: 'contract_mismatch' };
       options.onResponse(body);
-      if (body.client.lookup !== 'pending') return { kind: 'done' };
+      // The company's people are fetched after the Client, so a done Client lookup is not the end.
+      if (body.client.lookup !== 'pending' && !companyContactsPending(body)) return { kind: 'done' };
     }
 
     const delay = delays[Math.min(attempt, delays.length - 1)];
