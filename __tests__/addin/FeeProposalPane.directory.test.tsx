@@ -28,7 +28,7 @@ describe('Word fee pane: choosing 0406 fills the Client-role company', () => {
 
   it('searches, selects, waits out the pending client lookup, and fills company and address', async () => {
     const prefills = [pending0406(), done0406()];
-    const fetchMock = jest.fn(async (url: string) => {
+    const fetchMock = jest.fn(async (url: string, _init?: RequestInit) => {
       if (url.startsWith('/synergy/projects?')) {
         return json({ items: [{ id: REF_0406, label: LABEL_0406, isActive: true, missingSince: null }] });
       }
@@ -64,7 +64,7 @@ describe('Word fee pane: choosing 0406 fills the Client-role company', () => {
     global.fetch = fetchMock as unknown as typeof fetch;
     render(<FeeProposalPane inWord={false} busy={null} run={jest.fn()} />);
     await userEvent.type(screen.getByPlaceholderText(/Search by job # or name/i), '0406');
-    expect(await screen.findByText(/sign in/i)).toBeInTheDocument();
+    expect(await screen.findByText(/sign-?in/i)).toBeInTheDocument();
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/synergy'))).toBe(false));
   });
 });

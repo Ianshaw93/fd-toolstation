@@ -13,8 +13,12 @@ import FeeOptionsSection from '../fee-proposal/FeeOptionsSection';
 import StageCards from './StageCards';
 import SynergyProjectPicker from './SynergyProjectPicker';
 import { SERVICE_LABELS_1_4, SERVICE_LABELS_5, SERVICE_LABELS_6 } from '../../lib/fee-constants';
-import { parseDirectoryPrefill } from '../../lib/synergy-client-enrichment';
-import { fetchFeeProposalPrefill } from '../../lib/synergy-api';
+import {
+  CLIENT_LOOKUP_TIMEOUT_NOTICE,
+  pollFeeProposalPrefill,
+  type PollOutcome,
+} from '../../lib/directory-prefill';
+import { fetchFeeProposalPrefill, type SynergyProjectHit } from '../../lib/synergy-api';
 
 // The fee proposal inside Word: the same form as the web tool, and Generate opens the
 // letter as a new Word document instead of downloading a file. The stage tables are
@@ -30,12 +34,48 @@ export default function FeeProposalPane({ inWord, busy, run }: Props) {
   const { state, dispatch, totalFee, buildRequest } = useFeeProposal();
   const [engineers, setEngineers] = useState<Engineer[]>([]);
   const linkGeneration = useRef(0);
+  const lookup = useRef<AbortController | null>(null);
   const engineersRef = useRef(engineers);
-  engineersRef.current = engineers;
+
+  useEffect(() => {
+    engineersRef.current = engineers;
+  }, [engineers]);
 
   useEffect(() => {
     fetchEngineersViaProxy().then(setEngineers).catch(() => setEngineers([]));
+    return () => lookup.current?.abort();
   }, []);
+
+  const linkProject = (hit: SynergyProjectHit) => {
+    lookup.current?.abort();
+    const controller = new AbortController();
+    lookup.current = controller;
+    const ref = hit.ref;
+    dispatch({
+      type: 'LINK_SYNERGY_PROJECT',
+      synergy_project_id: hit.synergy_project_id,
+      organisation_id: hit.organisation_id,
+      label: hit.label,
+      generation: ++linkGeneration.current,
+      ref,
+      project_name: hit.name ?? null,
+      // The site address is not the client's address, so a hit location is not written.
+      project_location: null,
+    });
+    void pollFeeProposalPrefill(ref, {
+      fetchPrefill: fetchFeeProposalPrefill,
+      signal: controller.signal,
+      onResponse: (response) =>
+        dispatch({
+          type: 'APPLY_DIRECTORY_PREFILL',
+          response,
+          engineer_names: engineersRef.current.map((engineer) => engineer.full_name),
+        }),
+    }).then((outcome) => {
+      const notice = outcomeNotice(outcome);
+      if (notice && !controller.signal.aborted) dispatch({ type: 'SET_DIRECTORY_NOTICE', ref, notice });
+    });
+  };
 
   /** The generator's own preconditions, checked here so the message is plain. */
   const missing = (): string | null => {
@@ -66,48 +106,9 @@ export default function FeeProposalPane({ inWord, busy, run }: Props) {
         selectedId={state.project.synergy_project_id}
         selectedOrgId={state.project.organisation_id}
         selectedLabel={state.project.synergy_project_label}
-        onSelect={(hit) => {
-          const generation = ++linkGeneration.current;
-          dispatch({
-            type: 'LINK_SYNERGY_PROJECT',
-            synergy_project_id: hit.synergy_project_id,
-            organisation_id: hit.organisation_id,
-            label: hit.label,
-            generation,
-            project_name: hit.name ?? null,
-            // Search hits do not carry a Client-role address. The checked
-            // project site was empty, so a hit location is not written here.
-            project_location: null,
-          });
-          void fetchFeeProposalPrefill(hit.organisation_id, hit.synergy_project_id)
-            .then((body) => {
-              if (linkGeneration.current !== generation) return;
-              const parsed = parseDirectoryPrefill(body);
-              if (!parsed.ok) {
-                dispatch({
-                  type: 'SET_SYNERGY_NOTICE',
-                  generation,
-                  notice: 'The project directory did not return a Client-role prefill. Company, name, and address stay as you left them.',
-                });
-                return;
-              }
-              dispatch({
-                type: 'APPLY_FEE_PREFILL',
-                generation,
-                prefill: parsed.prefill,
-                engineer_names: engineersRef.current.map((engineer) => engineer.full_name),
-              });
-            })
-            .catch((error: Error) => {
-              if (linkGeneration.current !== generation) return;
-              dispatch({
-                type: 'SET_SYNERGY_NOTICE',
-                generation,
-                notice: error.message || 'The project directory did not return a Client-role prefill. Company, name, and address stay as you left them.',
-              });
-            });
-        }}
+        onSelect={linkProject}
         onUnlink={() => {
+          lookup.current?.abort();
           dispatch({ type: 'UNLINK_SYNERGY_PROJECT' });
         }}
       />
@@ -169,4 +170,17 @@ export default function FeeProposalPane({ inWord, busy, run }: Props) {
       </div>
     </div>
   );
+}
+
+function outcomeNotice(outcome: PollOutcome): string | null {
+  switch (outcome.kind) {
+    case 'timeout':
+      return CLIENT_LOOKUP_TIMEOUT_NOTICE;
+    case 'contract_mismatch':
+      return 'The project directory answered in a format this pane does not read. Fill in the client details by hand.';
+    case 'error':
+      return outcome.message;
+    default:
+      return null;
+  }
 }

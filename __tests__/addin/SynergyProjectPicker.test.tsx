@@ -7,6 +7,7 @@ jest.mock('../../lib/synergy-api');
 
 const mockHits: synergyApi.SynergyProjectHit[] = [
   {
+    ref: "synergy:5466:1001",
     synergy_project_id: 1001,
     organisation_id: 5466,
     label: '0657 Panattoni California Drive',
@@ -15,6 +16,7 @@ const mockHits: synergyApi.SynergyProjectHit[] = [
     active: true,
   },
   {
+    ref: "synergy:5466:1002",
     synergy_project_id: 1002,
     organisation_id: 5466,
     label: '0406 Former Homebase Site North Finchley',
@@ -23,6 +25,7 @@ const mockHits: synergyApi.SynergyProjectHit[] = [
     active: true,
   },
   {
+    ref: "synergy:5466:1003",
     synergy_project_id: 1003,
     organisation_id: 5466,
     label: '0243 St Marys Residential Phase 2',
@@ -31,6 +34,7 @@ const mockHits: synergyApi.SynergyProjectHit[] = [
     active: true,
   },
   {
+    ref: "synergy:5466:1004",
     synergy_project_id: 1004,
     organisation_id: 5466,
     label: '0189 Old Warehouse Conversion DSEAR',

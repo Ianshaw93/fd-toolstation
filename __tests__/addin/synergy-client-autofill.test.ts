@@ -3,7 +3,6 @@ import {
   applyMissingClientSource,
   applySynergyEnrichment,
   feeProposalPrefillFromV2,
-  parseDirectoryPrefill,
   parseFeeEnrichment,
   readOfficialProjectClient,
   SYNERGY_CLIENT_PROJECT_MANAGER_ROLE_ID,
@@ -396,38 +395,5 @@ describe('Synergy client-role autofill', () => {
     expect(next.surname).toBe('Lovelace');
     expect(next.company_name).toBe('');
     expect(next.address_lines.every((line) => line === '')).toBe(true);
-  });
-
-  it('keeps a typed address when applying the directory prefill envelope', () => {
-    const typed = blank();
-    typed.company_name = 'Typed Company Ltd';
-    typed.first_name = 'Manual';
-    typed.address_lines = ['1 Typed Street', '', '', '', '', ''];
-    typed.project_location = 'Typed location';
-    const parsed = parseDirectoryPrefill({
-      company_name: { value: 'Taylor Wimpey North Thames', status: 'present', source: 'client_role' },
-      first_name: { value: null, status: 'absent', source: null },
-      surname: { value: null, status: 'absent', source: null },
-      address_lines: {
-        value: ['The Dock,', 'Station road, Kings Langley', 'Hertfordshire', 'WD4 8LZ', 'United Kingdom'],
-        status: 'needs_review',
-        source: 'company_address_home',
-      },
-      project_name: { value: 'Former Homebase Site North Finchley', status: 'present', source: 'project_name' },
-      project_location: { value: null, status: 'absent', source: null },
-      country: { value: null, status: 'absent', source: null },
-      engineer_name: { value: null, status: 'absent', source: null },
-      pii_limit: { value: null, status: 'absent', source: null },
-      include_hourly_rates: { value: null, status: 'absent', source: null },
-    });
-    expect(parsed.ok).toBe(true);
-    if (!parsed.ok) return;
-    const next = applyFeeProposalPrefill(typed, parsed.prefill, ENGINEERS);
-    expect(next.company_name).toBe('Typed Company Ltd');
-    expect(next.first_name).toBe('Manual');
-    expect(next.address_lines[0]).toBe('1 Typed Street');
-    expect(next.project_location).toBe('Typed location');
-    expect(next.project_name).toBe('Former Homebase Site North Finchley');
-    expect(next.country).toBe('EW');
   });
 });

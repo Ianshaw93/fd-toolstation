@@ -122,6 +122,36 @@ export function applyMissingClientSource(
   return next;
 }
 
+/** Clears client fields that still hold the value autofill wrote. Typed values stay. */
+export function releaseClientAutofill<S extends FeeAutofillState>(state: S): S {
+  const memory: FeeAutofillMemory = { ...(state.autofill ?? {}) };
+  const next = { ...state, address_lines: [...state.address_lines] };
+  clearClientIfAutofilled(next, memory);
+  next.autofill = Object.keys(memory).length ? memory : null;
+  return next;
+}
+
+/**
+ * A different project was chosen: clear every value autofill wrote that the user has
+ * not edited since, and forget what was filled.
+ */
+export function releaseSourcedValues<S extends FeeAutofillState>(state: S): S {
+  const memory = state.autofill;
+  if (!memory) return state;
+  const next = releaseClientAutofill(state);
+  for (const field of ['project_name', 'project_location', 'engineer_name'] as const) {
+    const filled = memory[field];
+    if (filled !== undefined && next[field].trim() === filled.trim()) next[field] = '';
+  }
+  if (memory.pii_limit !== undefined && next.pii_limit === memory.pii_limit) next.pii_limit = 100000;
+  if (memory.include_hourly_rates !== undefined && next.include_hourly_rates === memory.include_hourly_rates) {
+    next.include_hourly_rates = false;
+  }
+  if (memory.country !== undefined && next.country === memory.country && !next.country_touched) next.country = 'EW';
+  next.autofill = null;
+  return next;
+}
+
 function clientSnapshot(state: FeeAutofillState): string {
   return JSON.stringify([state.company_name, state.first_name, state.surname, state.address_lines]);
 }
@@ -287,6 +317,12 @@ function canReplaceBoolean(current: boolean, previous: boolean | undefined, fall
   return previous === undefined && current === fallback;
 }
 
+function padExactAddress(lines: string[]): string[] {
+  const kept = lines.filter((line) => line.trim() !== '').slice(0, 6);
+  while (kept.length < 6) kept.push('');
+  return kept;
+}
+
 function padAddress(lines: string[]): string[] {
   const kept = lines.map((line) => line.trim()).filter(Boolean).slice(0, 6);
   while (kept.length < 6) kept.push('');
@@ -364,8 +400,6 @@ export interface FeeProposalPrefill {
 export const COMPANY_ADDRESS_HOME_NOTICE =
   'Company address was taken from the company addressHome slot and needs review.';
 
-const PREFILL_STATUSES = new Set<PrefillStatus>(['present', 'absent', 'needs_review', 'unavailable']);
-
 export function feeProposalPrefillFromV2(payload: {
   projectId: number;
   roleId: number;
@@ -401,40 +435,6 @@ export function feeProposalPrefillFromV2(payload: {
   return prefill;
 }
 
-export function parseDirectoryPrefill(payload: unknown):
-  | { ok: true; prefill: FeeProposalPrefill }
-  | { ok: false; reason: 'contract_missing' } {
-  if (!isRecord(payload)) return { ok: false, reason: 'contract_missing' };
-  const company_name = readField<string>(payload.company_name, 'string');
-  const first_name = readField<string>(payload.first_name, 'string');
-  const surname = readField<string>(payload.surname, 'string');
-  const project_name = readField<string>(payload.project_name, 'string');
-  const project_location = readField<string>(payload.project_location, 'string');
-  const engineer_name = readField<string>(payload.engineer_name, 'string');
-  const pii_limit = readField<number>(payload.pii_limit, 'number');
-  const include_hourly_rates = readField<boolean>(payload.include_hourly_rates, 'boolean');
-  const country = readCountryField(payload.country);
-  const address_lines = readAddressField(payload.address_lines);
-  if (!company_name || !first_name || !surname || !project_name || !project_location || !engineer_name || !pii_limit || !include_hourly_rates || !country || !address_lines) {
-    return { ok: false, reason: 'contract_missing' };
-  }
-  return {
-    ok: true,
-    prefill: {
-      company_name,
-      first_name,
-      surname,
-      address_lines,
-      project_name,
-      project_location,
-      country,
-      engineer_name,
-      pii_limit,
-      include_hourly_rates,
-    },
-  };
-}
-
 export function applyFeeProposalPrefill(
   state: FeeAutofillState,
   prefill: FeeProposalPrefill,
@@ -462,7 +462,7 @@ export function applyFeeProposalPrefill(
   ) {
     const lines = prefill.address_lines.value;
     if (lines && canReplaceLines(next.address_lines, memory.address_lines)) {
-      const padded = padAddress(lines.filter((line) => line !== ''));
+      const padded = padExactAddress(lines);
       next.address_lines = padded;
       memory.address_lines = padded;
     }
@@ -556,34 +556,4 @@ function streetLines(value: unknown): string[] | null {
 function compactAddress(value: Record<string, unknown>): string[] {
   const parts = [value.address1, value.address2, value.town, value.state, value.zipCode, value.country];
   return parts.filter((part): part is string => typeof part === 'string' && part.trim() !== '').slice(0, 6);
-}
-
-function readField<T>(value: unknown, kind: 'string' | 'number' | 'boolean'): PrefillField<T> | null {
-  if (!isRecord(value) || typeof value.status !== 'string' || !PREFILL_STATUSES.has(value.status as PrefillStatus)) return null;
-  const status = value.status as PrefillStatus;
-  const source = typeof value.source === 'string' ? value.source : null;
-  if (value.value === null || value.value === undefined) return { value: null, status, source };
-  if (kind === 'string' && typeof value.value === 'string') return { value: value.value as T, status, source };
-  if (kind === 'number' && typeof value.value === 'number') return { value: value.value as T, status, source };
-  if (kind === 'boolean' && typeof value.value === 'boolean') return { value: value.value as T, status, source };
-  return null;
-}
-
-function readCountryField(value: unknown): PrefillField<FeeCountry> | null {
-  const field = readField<string>(value, 'string');
-  if (!field) return null;
-  if (field.value === null) return { value: null, status: field.status, source: field.source };
-  if (field.value === 'EW' || field.value === 'J' || field.value === 'OTHER') {
-    return { value: field.value, status: field.status, source: field.source };
-  }
-  return null;
-}
-
-function readAddressField(value: unknown): PrefillField<string[]> | null {
-  if (!isRecord(value) || typeof value.status !== 'string' || !PREFILL_STATUSES.has(value.status as PrefillStatus)) return null;
-  const status = value.status as PrefillStatus;
-  const source = typeof value.source === 'string' ? value.source : null;
-  if (value.value === null || value.value === undefined) return { value: null, status, source };
-  if (!Array.isArray(value.value) || value.value.some((line) => typeof line !== 'string')) return null;
-  return { value: value.value, status, source };
 }

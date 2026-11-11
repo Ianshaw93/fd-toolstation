@@ -43,11 +43,11 @@ describe('directory fee-proposal-prefill contractVersion 1', () => {
 
   it('rejects anything that is not contractVersion 1 with all ten fields', () => {
     expect(parseFeeProposalPrefillV1({ ...done0406(), contractVersion: 2 }).ok).toBe(false);
-    const missing = done0406() as { fields: Record<string, unknown> };
+    const missing = done0406();
     delete missing.fields.clientCompanyName;
     expect(parseFeeProposalPrefillV1(missing).ok).toBe(false);
     expect(parseFeeProposalPrefillV1({ company_name: { value: 'X', status: 'present', source: null } }).ok).toBe(false);
-    const noRef = done0406() as { project: { id: unknown } };
+    const noRef = done0406();
     noRef.project.id = 2694397;
     expect(parseFeeProposalPrefillV1(noRef).ok).toBe(false);
   });
@@ -79,7 +79,7 @@ describe('directory fee-proposal-prefill contractVersion 1', () => {
 
   it('keeps project country manual for an unknown or UK value', () => {
     const uk = done0406();
-    uk.fields.projectCountry = { value: 'United Kingdom' as never, status: 'found', source: 'x' };
+    uk.fields.projectCountry = { value: 'United Kingdom', status: 'found', source: 'x' };
     const parsedUk = parseFeeProposalPrefillV1(uk);
     const state = { ...blank(), country: 'J' as const, country_touched: true };
     if (parsedUk.ok) {
@@ -87,7 +87,7 @@ describe('directory fee-proposal-prefill contractVersion 1', () => {
       expect(next.country).toBe('J');
     }
     const unknown = done0406();
-    unknown.fields.projectCountry = { value: 'UK' as never, status: 'found', source: 'x' };
+    unknown.fields.projectCountry = { value: 'UK', status: 'found', source: 'x' };
     const parsedUnknown = parseFeeProposalPrefillV1(unknown);
     if (parsedUnknown.ok) {
       expect(applyDirectoryPrefill(blank(), parsedUnknown.response, REF_0406, ENGINEERS).autofill?.country).toBeUndefined();
@@ -96,15 +96,15 @@ describe('directory fee-proposal-prefill contractVersion 1', () => {
 
   it('applies PII and hourly rates only when the field is verified', () => {
     const unverified = done0406();
-    unverified.fields.piiLimit = { value: 5000000 as never, status: 'found', source: 'x' };
-    unverified.fields.includeHourlyRates = { value: true as never, status: 'found', source: 'x' };
+    unverified.fields.piiLimit = { value: 5000000, status: 'found', source: 'x' };
+    unverified.fields.includeHourlyRates = { value: true, status: 'found', source: 'x' };
     const keep = applyDirectoryPrefill(blank(), parsed(unverified), REF_0406, ENGINEERS);
     expect(keep.pii_limit).toBe(100000);
     expect(keep.include_hourly_rates).toBe(false);
 
     const verified = done0406();
-    verified.fields.piiLimit = { value: 5000000 as never, status: 'verified', source: 'x' };
-    verified.fields.includeHourlyRates = { value: true as never, status: 'verified', source: 'x' };
+    verified.fields.piiLimit = { value: 5000000, status: 'verified', source: 'x' };
+    verified.fields.includeHourlyRates = { value: true, status: 'verified', source: 'x' };
     const applied = applyDirectoryPrefill(blank(), parsed(verified), REF_0406, ENGINEERS);
     expect(applied.pii_limit).toBe(5000000);
     expect(applied.include_hourly_rates).toBe(true);
@@ -135,8 +135,8 @@ describe('directory fee-proposal-prefill contractVersion 1', () => {
     const filled = applyDirectoryPrefill(blank(), parsed(done0406()), REF_0406, ENGINEERS);
     const none = done0406();
     none.client = { lookup: 'done', status: 'not_found' };
-    none.fields.clientCompanyName = { value: null as never, status: 'not_found', source: 'x' };
-    none.fields.clientAddressLines = { value: null as never, status: 'not_found', source: 'x', review: [] };
+    none.fields.clientCompanyName = { value: null, status: 'not_found', source: 'x' };
+    none.fields.clientAddressLines = { value: null, status: 'not_found', source: 'x', review: [] };
     const next = applyDirectoryPrefill(filled, parsed(none), REF_0406, ENGINEERS);
     expect(next.company_name).toBe('');
     expect(next.address_lines.every((line) => line === '')).toBe(true);

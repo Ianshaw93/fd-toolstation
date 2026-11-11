@@ -8,6 +8,23 @@ export const LABEL_0406 = '0406 Former Homebase Site North Finchley';
 
 const CLIENT_SOURCE = 'ProjectContacts/Index (role Client)';
 
+export interface FixtureField {
+  value: unknown;
+  status: string;
+  source: string | null;
+  review?: string[];
+}
+
+export interface FixturePrefill {
+  contractVersion: number;
+  project: { id: unknown; label: string; isActive: boolean; missingSince: string | null };
+  source: Record<string, unknown>;
+  siteAddress: { lines: string[]; country: string };
+  projectManager: { name: string };
+  fields: Record<string, FixtureField>;
+  client: { lookup: string; status: string | null };
+}
+
 function base() {
   return {
     contractVersion: 1,
@@ -24,8 +41,8 @@ function base() {
   };
 }
 
-export function pending0406() {
-  const pending = { value: null, status: 'lookup_pending', source: CLIENT_SOURCE };
+export function pending0406(): FixturePrefill {
+  const pending: FixtureField = { value: null, status: 'lookup_pending', source: CLIENT_SOURCE };
   return {
     ...base(),
     fields: {
@@ -44,7 +61,7 @@ export function pending0406() {
   };
 }
 
-export function done0406() {
+export function done0406(): FixturePrefill {
   return {
     ...base(),
     fields: {

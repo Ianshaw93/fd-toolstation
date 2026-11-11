@@ -16,9 +16,11 @@ import type {
   ServiceKey6,
 } from '../lib/fee-types';
 import { defaultServiceConfig } from '../lib/fee-constants';
+import { applyDirectoryPrefill, type DirectoryPrefillResponse } from '../lib/directory-prefill';
 import {
   applyFeeProposalPrefill,
   applySynergyEnrichment,
+  releaseSourcedValues,
   type FeeAutofillMemory,
   type FeeAutofillState,
   type FeeProposalPrefill,
@@ -33,6 +35,7 @@ interface FeeProposalState {
   design_stages_5: DesignStagesRiba5;
   design_stages_6: DesignStagesRiba6;
   synergy_link_generation: number;
+  synergy_project_ref: string | null;
   country_touched: boolean;
   synergy_autofill: FeeAutofillMemory | null;
   client_role_notice: string | null;
@@ -51,6 +54,7 @@ type Action =
       organisation_id: number;
       label: string;
       generation: number;
+      ref?: string;
       project_name?: string | null;
       project_location?: string | null;
     }
@@ -66,7 +70,13 @@ type Action =
       prefill: FeeProposalPrefill;
       engineer_names: string[];
     }
+  | {
+      type: 'APPLY_DIRECTORY_PREFILL';
+      response: DirectoryPrefillResponse;
+      engineer_names: string[];
+    }
   | { type: 'SET_SYNERGY_NOTICE'; generation: number; notice: string }
+  | { type: 'SET_DIRECTORY_NOTICE'; ref: string; notice: string }
   | { type: 'UNLINK_SYNERGY_PROJECT' }
   | { type: 'SET_FEE_OPTIONS'; field: keyof FeeOptions; value: string | number | boolean }
   | { type: 'SET_SERVICE_1_4'; key: ServiceKey1to4; field: keyof ServiceConfig; value: boolean | number | string | null }
@@ -87,6 +97,7 @@ function initialState(): FeeProposalState {
     client: { first_name: '', surname: '', company_name: '', address_lines: ['', '', '', '', '', ''] },
     project: { project_name: '', project_location: '', country: 'EW', vat_applicable: true, legislation: '' },
     synergy_link_generation: 0,
+    synergy_project_ref: null,
     country_touched: false,
     synergy_autofill: null,
     client_role_notice: null,
@@ -200,7 +211,7 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
 
     case 'LINK_SYNERGY_PROJECT': {
       const absent = { value: null, status: 'absent' as const, source: null };
-      const applied = applyFeeProposalPrefill(autofillSlice(state), {
+      const applied = applyFeeProposalPrefill(releaseSourcedValues(autofillSlice(state)), {
         company_name: absent,
         first_name: absent,
         surname: absent,
@@ -218,6 +229,7 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
       return {
         ...written,
         synergy_link_generation: action.generation,
+        synergy_project_ref: action.ref ?? `synergy:${action.organisation_id}:${action.synergy_project_id}`,
         project: {
           ...written.project,
           synergy_project_id: action.synergy_project_id,
@@ -249,6 +261,21 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
       return writeAutofill(state, applied);
     }
 
+    case 'APPLY_DIRECTORY_PREFILL': {
+      if (action.response.ref !== state.synergy_project_ref) return state;
+      const applied = applyDirectoryPrefill(
+        autofillSlice(state),
+        action.response,
+        state.synergy_project_ref,
+        action.engineer_names,
+      );
+      return writeAutofill(state, applied);
+    }
+
+    case 'SET_DIRECTORY_NOTICE':
+      if (action.ref !== state.synergy_project_ref) return state;
+      return { ...state, client_role_notice: action.notice };
+
     case 'SET_SYNERGY_NOTICE':
       if (action.generation !== state.synergy_link_generation) return state;
       return { ...state, client_role_notice: action.notice };
@@ -257,7 +284,7 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
       return {
         ...state,
         synergy_link_generation: 0,
-        synergy_autofill: null,
+        synergy_project_ref: null,
         client_role_notice: null,
         project: {
           ...state.project,
