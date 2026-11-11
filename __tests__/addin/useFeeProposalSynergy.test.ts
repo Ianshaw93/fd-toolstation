@@ -2,6 +2,8 @@ import { renderHook, act } from '@testing-library/react';
 import { useFeeProposal } from '../../hooks/useFeeProposal';
 import { parseFeeEnrichment, SYNERGY_CLIENT_ROLE_ID } from '../../lib/synergy-client-enrichment';
 import { renderFeeProposal } from '../../lib/word-addin-api';
+import { parseFeeProposalPrefillV1 } from '../../lib/directory-prefill';
+import { done0406, LABEL_0406, pending0406, REF_0406 } from '../../test-fixtures/directory-prefill-0406';
 
 const explicitClient = {
   organisation_id: 5466,
@@ -222,5 +224,74 @@ describe('useFeeProposal with Synergy project link', () => {
     expect(body.client.surname).toBe('Lovelace');
     expect(body.client.address_lines).toEqual(['10 Client Street']);
     expect(body.client.first_name).not.toBe(body.client.company_name);
+  });
+});
+
+describe('useFeeProposal with the directory prefill', () => {
+  function link(result: { current: ReturnType<typeof useFeeProposal> }, projectId: number, label: string, generation: number) {
+    result.current.dispatch({
+      type: 'LINK_SYNERGY_PROJECT',
+      synergy_project_id: projectId,
+      organisation_id: 5466,
+      label,
+      generation,
+      project_name: label.slice(5),
+      project_location: null,
+    });
+  }
+
+  function apply(result: { current: ReturnType<typeof useFeeProposal> }, body: unknown) {
+    const parsed = parseFeeProposalPrefillV1(body);
+    if (!parsed.ok) throw new Error('fixture rejected');
+    result.current.dispatch({ type: 'APPLY_DIRECTORY_PREFILL', response: parsed.response, engineer_names: ['Sam Bennett'] });
+  }
+
+  it('fills 0406 from the Client-role company and keeps the synergy ref on the link', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    act(() => link(result, 2694397, LABEL_0406, 1));
+    expect(result.current.state.synergy_project_ref).toBe(REF_0406);
+    act(() => apply(result, pending0406()));
+    expect(result.current.state.client.company_name).toBe('');
+    expect(result.current.state.client_role_notice).toMatch(/looking up/i);
+    act(() => apply(result, done0406()));
+    expect(result.current.state.client.company_name).toBe('Taylor Wimpey North Thames');
+    expect(result.current.state.client.first_name).toBe('');
+    expect(result.current.state.client.address_lines[0]).toBe('The Dock,');
+    expect(result.current.state.fee_options.engineer_name).toBe('');
+    expect(result.current.state.project.country).toBe('EW');
+  });
+
+  it('ignores a prefill for an earlier selection', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    act(() => link(result, 1, '0001 SYNTH Yard', 1));
+    act(() => apply(result, done0406()));
+    expect(result.current.state.client.company_name).toBe('');
+  });
+
+  it('clears values it filled when another project is chosen, and keeps typed ones', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    act(() => link(result, 2694397, LABEL_0406, 1));
+    act(() => apply(result, done0406()));
+    act(() => {
+      result.current.dispatch({ type: 'SET_CLIENT', field: 'first_name', value: 'Typed' });
+    });
+    act(() => result.current.dispatch({ type: 'UNLINK_SYNERGY_PROJECT' }));
+    expect(result.current.state.client.company_name).toBe('Taylor Wimpey North Thames');
+    act(() => link(result, 1, '0001 SYNTH Yard', 2));
+    expect(result.current.state.client.company_name).toBe('');
+    expect(result.current.state.client.address_lines.every((line) => line === '')).toBe(true);
+    expect(result.current.state.client.first_name).toBe('Typed');
+    expect(result.current.state.project.project_name).toBe('SYNTH Yard');
+  });
+
+  it('keeps a company the user edited after it was filled', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    act(() => link(result, 2694397, LABEL_0406, 1));
+    act(() => apply(result, done0406()));
+    act(() => {
+      result.current.dispatch({ type: 'SET_CLIENT', field: 'company_name', value: 'Taylor Wimpey UK Ltd' });
+    });
+    act(() => link(result, 1, '0001 SYNTH Yard', 2));
+    expect(result.current.state.client.company_name).toBe('Taylor Wimpey UK Ltd');
   });
 });
