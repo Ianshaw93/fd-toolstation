@@ -11,6 +11,7 @@ import ClientDetailsSection from '../fee-proposal/ClientDetailsSection';
 import ProjectDetailsSection from '../fee-proposal/ProjectDetailsSection';
 import FeeOptionsSection from '../fee-proposal/FeeOptionsSection';
 import StageCards from './StageCards';
+import SynergyProjectPicker from './SynergyProjectPicker';
 import { SERVICE_LABELS_1_4, SERVICE_LABELS_5, SERVICE_LABELS_6 } from '../../lib/fee-constants';
 
 // The fee proposal inside Word: the same form as the web tool, and Generate opens the
@@ -56,6 +57,27 @@ export default function FeeProposalPane({ inWord, busy, run }: Props) {
 
   return (
     <div className="space-y-3">
+      <SynergyProjectPicker
+        selectedId={state.project.synergy_project_id}
+        selectedOrgId={state.project.organisation_id}
+        selectedLabel={state.project.synergy_project_label}
+        onSelect={(hit) => {
+          dispatch({
+            type: 'LINK_SYNERGY_PROJECT',
+            synergy_project_id: hit.synergy_project_id,
+            organisation_id: hit.organisation_id,
+            label: hit.label,
+            inferred_name: hit.name ?? undefined,
+            inferred_location: hit.location ?? undefined,
+            inferred_client: hit.client_name ?? undefined,
+            inferred_manager: hit.manager ?? undefined,
+          });
+        }}
+        onUnlink={() => {
+          dispatch({ type: 'UNLINK_SYNERGY_PROJECT' });
+        }}
+      />
+
       <CollapsibleSection title="Client Details" dense defaultOpen={true}>
         <ClientDetailsSection client={state.client} dispatch={dispatch} />
       </CollapsibleSection>

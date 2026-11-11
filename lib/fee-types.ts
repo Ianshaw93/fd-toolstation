@@ -37,6 +37,10 @@ export interface ProjectDetails {
   // Legislation reference for an 'OTHER' country. Blank falls back to the
   // England/Wales reference.
   legislation: string;
+  // Optional Total Synergy link fields
+  synergy_project_id?: number;
+  organisation_id?: number;
+  synergy_project_label?: string;
 }
 
 export interface FeeOptions {

@@ -32,7 +32,18 @@ type Action =
   // Replace the whole form, e.g. from the state a Word document remembers.
   | { type: 'HYDRATE'; state: FeeProposalState }
   | { type: 'SET_CLIENT'; field: keyof ClientDetails; value: string | string[] }
-  | { type: 'SET_PROJECT'; field: keyof ProjectDetails; value: string | boolean }
+  | { type: 'SET_PROJECT'; field: keyof ProjectDetails; value: string | boolean | number | undefined }
+  | {
+      type: 'LINK_SYNERGY_PROJECT';
+      synergy_project_id: number;
+      organisation_id: number;
+      label: string;
+      inferred_name?: string | null;
+      inferred_location?: string | null;
+      inferred_client?: string | null;
+      inferred_manager?: string | null;
+    }
+  | { type: 'UNLINK_SYNERGY_PROJECT' }
   | { type: 'SET_FEE_OPTIONS'; field: keyof FeeOptions; value: string | number | boolean }
   | { type: 'SET_SERVICE_1_4'; key: ServiceKey1to4; field: keyof ServiceConfig; value: boolean | number | string | null }
   | { type: 'SET_SERVICE_5'; key: ServiceKey5; field: keyof ServiceConfig; value: boolean | number | string | null }
@@ -103,6 +114,50 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
       }
       return { ...state, project: { ...state.project, [action.field]: action.value } };
     }
+
+    case 'LINK_SYNERGY_PROJECT': {
+      // If fields are empty, infer them from directory details; otherwise leave them intact (no silent remap).
+      const shouldFillName = !state.project.project_name.trim() && action.inferred_name;
+      const shouldFillLocation = !state.project.project_location.trim() && action.inferred_location;
+
+      let newClient = { ...state.client };
+      if (action.inferred_client && !state.client.first_name.trim() && !state.client.surname.trim()) {
+        const parts = action.inferred_client.trim().split(/\s+/);
+        const firstName = parts[0] || '';
+        const surname = parts.slice(1).join(' ') || '';
+        newClient = { ...newClient, first_name: firstName, surname };
+      }
+
+      let newFeeOptions = { ...state.fee_options };
+      if (action.inferred_manager && !state.fee_options.engineer_name.trim()) {
+        newFeeOptions = { ...newFeeOptions, engineer_name: action.inferred_manager };
+      }
+
+      return {
+        ...state,
+        client: newClient,
+        fee_options: newFeeOptions,
+        project: {
+          ...state.project,
+          synergy_project_id: action.synergy_project_id,
+          organisation_id: action.organisation_id,
+          synergy_project_label: action.label,
+          project_name: shouldFillName ? action.inferred_name!.trim() : state.project.project_name,
+          project_location: shouldFillLocation ? action.inferred_location!.trim() : state.project.project_location,
+        },
+      };
+    }
+
+    case 'UNLINK_SYNERGY_PROJECT':
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          synergy_project_id: undefined,
+          organisation_id: undefined,
+          synergy_project_label: undefined,
+        },
+      };
 
     case 'SET_FEE_OPTIONS':
       return { ...state, fee_options: { ...state.fee_options, [action.field]: action.value } };
