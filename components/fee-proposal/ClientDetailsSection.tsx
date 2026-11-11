@@ -2,6 +2,8 @@
 
 import { Dispatch, useId } from 'react';
 import type { ContactSuggestions } from '../../lib/client-contact-suggestions';
+import { addressReviewText, type FieldProvenance } from '../../lib/field-provenance';
+import SourceBadge from './SourceBadge';
 import type { ClientDetails } from '../../lib/fee-types';
 
 interface Props {
@@ -11,9 +13,12 @@ interface Props {
   showCompany?: boolean;
   /** Word task pane only: the Client company's people, picked by click into first name / surname. */
   contactSuggestions?: ContactSuggestions;
+  /** Word task pane only: where autofilled values came from. */
+  provenance?: Pick<FieldProvenance, 'company' | 'names' | 'address'>;
 }
 
-export default function ClientDetailsSection({ client, dispatch, showCompany = false, contactSuggestions }: Props) {
+export default function ClientDetailsSection({ client, dispatch, showCompany = false, contactSuggestions, provenance }: Props) {
+  const addressReview = provenance?.address?.kind === 'synergy' ? provenance.address.review : undefined;
   const id = useId();
   const people = contactSuggestions?.people ?? [];
   const groupLabel = `${contactSuggestions?.companyName ?? 'Client company'} company contacts`;
@@ -21,8 +26,12 @@ export default function ClientDetailsSection({ client, dispatch, showCompany = f
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {showCompany && (
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <label htmlFor={`${id}-company`} className="block text-sm font-medium text-gray-700">Company</label>
+            <SourceBadge provenance={provenance?.company} testId="source-company" />
+          </div>
           <input
+            id={`${id}-company`}
             type="text"
             value={client.company_name ?? ''}
             onChange={(e) => dispatch({ type: 'SET_CLIENT', field: 'company_name', value: e.target.value })}
@@ -58,7 +67,10 @@ export default function ClientDetailsSection({ client, dispatch, showCompany = f
         </div>
       )}
       <div>
-        <label htmlFor={`${id}-first`} className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <label htmlFor={`${id}-first`} className="block text-sm font-medium text-gray-700">First Name</label>
+          <SourceBadge provenance={provenance?.names} testId="source-names" />
+        </div>
         <input
           id={`${id}-first`}
           type="text"
@@ -78,7 +90,15 @@ export default function ClientDetailsSection({ client, dispatch, showCompany = f
         />
       </div>
       <div className="md:col-span-2">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <span className="block text-sm font-medium text-gray-700">Address</span>
+          <SourceBadge provenance={provenance?.address} testId="source-address" />
+        </div>
+        {addressReview?.length ? (
+          <p data-testid="address-review" className="mb-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+            {addressReviewText(addressReview)}
+          </p>
+        ) : null}
         <div className="space-y-2">
           {client.address_lines.map((line, i) => (
             <input

@@ -44,6 +44,10 @@ interface FeeProposalState {
    */
   engineer_source: 'empty' | 'account' | 'user';
   engineer_account: string | null;
+  /** The user changed an engineer that sign-in had chosen (for the "Edited by you" badge). */
+  engineer_was_auto: boolean;
+  /** Why the applied client address needs review, from the prefill's `review`. */
+  directory_review: Array<'hasAddress_false' | 'home_slot_on_company_record'>;
   /** The linked Client company's people, offered as name tags. Never applied without a click. */
   contact_suggestions: ContactSuggestions;
   /** The tag the user last clicked, so a project switch can clear those names if still unchanged. */
@@ -87,6 +91,8 @@ function initialState(): FeeProposalState {
     client_role_notice: null,
     engineer_source: 'empty',
     engineer_account: null,
+    engineer_was_auto: false,
+    directory_review: [],
     contact_suggestions: NO_CONTACT_SUGGESTIONS,
     client_contact_pick: null,
     fee_options: { engineer_name: '', pii_limit: 100000, include_hourly_rates: false },
@@ -142,6 +148,16 @@ function prefillTarget(state: FeeProposalState): PrefillTarget {
   };
 }
 
+/**
+ * The shared merge only lists what it applied this time. Fields the user kept still carry what was
+ * applied before, so their history (and protection against refilling a cleared field) survives.
+ */
+function carryKept(previous: Partial<PrefillTarget>, merged: { applied: Partial<PrefillTarget>; kept: (keyof PrefillTarget)[] }) {
+  const carried: Partial<PrefillTarget> = {};
+  for (const key of merged.kept) if (key in previous) (carried as Record<string, unknown>)[key] = previous[key];
+  return { ...carried, ...merged.applied };
+}
+
 function withSplitAddress(prefill: FeeProposalPrefill): FeeProposalPrefill {
   const address = prefill.fields.clientAddressLines;
   if (!Array.isArray(address.value)) return prefill;
@@ -179,7 +195,12 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
     case 'HYDRATE': {
       const hydrated = { ...initialState(), ...action.state };
       if (hydrated.engineer_source === 'account') return hydrated;
-      return { ...hydrated, engineer_source: hydrated.fee_options.engineer_name ? 'user' : 'empty', engineer_account: null };
+      return {
+        ...hydrated,
+        engineer_source: hydrated.fee_options.engineer_name ? 'user' : 'empty',
+        engineer_account: null,
+        engineer_was_auto: false,
+      };
     }
 
     case 'SET_CLIENT':
@@ -216,7 +237,7 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         selectedRef: project.id,
       });
       const values = { ...reset.values };
-      const applied = { ...reset.applied };
+      const applied = carryKept(state.directory_applied, reset);
       if (values.projectName === PREFILL_DEFAULTS.projectName && project.name) {
         values.projectName = project.name;
         applied.projectName = project.name;
@@ -224,6 +245,7 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
       const written = writePrefillTarget(state, values, applied);
       return {
         ...written,
+        directory_review: 'clientAddressLines' in applied ? state.directory_review : [],
         synergy_project_ref: project.id,
         client_role_notice: null,
         project: {
@@ -252,8 +274,15 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
           ? `The imported address has ${lines.length} lines, more than the usual six. All are kept below; check them before sending.`
           : null;
       const notice = [prefillNotice(prefill, merged.needsReview), overflow].filter(Boolean).join(' ');
+      const addressReview = merged.needsReview.find((item) => item.field === 'clientAddressLines')?.review ?? [];
       return {
-        ...writePrefillTarget(state, merged.values, merged.applied),
+        ...writePrefillTarget(state, merged.values, carryKept(state.directory_applied, merged)),
+        directory_review:
+          merged.applied.clientAddressLines !== undefined
+            ? addressReview
+            : merged.kept.includes('clientAddressLines')
+              ? state.directory_review
+              : [],
         client_role_notice: notice || null,
         contact_suggestions: readContactSuggestions(prefill),
       };
@@ -281,6 +310,7 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         fee_options: { ...state.fee_options, engineer_name: engineer ?? '' },
         engineer_source: engineer ? 'account' : 'empty',
         engineer_account: engineer ? action.accountKey : null,
+        engineer_was_auto: false,
       };
     }
 
@@ -307,7 +337,13 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
       return {
         ...state,
         fee_options: { ...state.fee_options, [action.field]: action.value },
-        ...(action.field === 'engineer_name' ? { engineer_source: 'user' as const, engineer_account: null } : {}),
+        ...(action.field === 'engineer_name'
+          ? {
+              engineer_source: 'user' as const,
+              engineer_account: null,
+              engineer_was_auto: state.engineer_source === 'account' || state.engineer_was_auto,
+            }
+          : {}),
       };
 
     case 'SET_SERVICE_1_4':

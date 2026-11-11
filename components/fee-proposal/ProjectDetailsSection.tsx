@@ -3,17 +3,24 @@
 import { Dispatch } from 'react';
 import type { ProjectDetails } from '../../lib/fee-types';
 import { COUNTRIES, LEGISLATION_REFERENCES } from '../../lib/fee-constants';
+import type { FieldProvenance } from '../../lib/field-provenance';
+import SourceBadge from './SourceBadge';
 
 interface Props {
   project: ProjectDetails;
   dispatch: Dispatch<any>;
+  /** Word task pane only: where autofilled values came from. */
+  provenance?: Pick<FieldProvenance, 'projectName' | 'country'>;
 }
 
-export default function ProjectDetailsSection({ project, dispatch }: Props) {
+export default function ProjectDetailsSection({ project, dispatch, provenance }: Props) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Project Name</label>
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <label className="block text-sm font-medium text-gray-700">Project Name</label>
+          <SourceBadge provenance={provenance?.projectName} testId="source-project-name" />
+        </div>
         <input
           type="text"
           value={project.project_name}
@@ -31,7 +38,10 @@ export default function ProjectDetailsSection({ project, dispatch }: Props) {
         />
       </div>
       <div className="md:col-span-2">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Project Country</label>
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <span className="block text-sm font-medium text-gray-700">Project Country</span>
+          <SourceBadge provenance={provenance?.country} testId="source-country" />
+        </div>
         <div className="flex gap-4">
           {COUNTRIES.map((c) => (
             <label key={c.value} className="flex items-center gap-2 cursor-pointer">

@@ -18,6 +18,7 @@ import type { FdSignIn } from '../../lib/fd-msal';
 import { fetchFeeProposalPrefill } from '../../lib/synergy-api';
 import type { DirectoryProject } from '../../lib/vendor/fd-directory-client';
 import { engineerForAccount } from '../../lib/engineer-identity';
+import { fieldProvenance, provenanceAnnouncement } from '../../lib/field-provenance';
 
 // The fee proposal inside Word: the same form as the web tool, and Generate opens the
 // letter as a new Word document instead of downloading a file. The stage tables are
@@ -40,6 +41,8 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
     return () => lookup.current?.abort();
   }, []);
 
+  const provenance = fieldProvenance(state);
+  const announcement = provenanceAnnouncement(provenance);
   const account = signIn?.state === 'signed_in' ? signIn.account : null;
   const accountEngineer = engineerForAccount(account, engineers);
   // Waits for the engineer list, so a signed-in person on the list is never treated as unknown.
@@ -101,18 +104,25 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
           dispatch({ type: 'UNLINK_SYNERGY_PROJECT' });
         }}
       />
-      {state.client_role_notice && (
-        <p className="text-xs text-gray-600" role="status">{state.client_role_notice}</p>
-      )}
+      <p data-testid="autofill-announcement" className="sr-only" aria-live="polite">{announcement}</p>
 
       <CollapsibleSection title="Client Details" dense defaultOpen={true}>
-        <ClientDetailsSection client={state.client} dispatch={dispatch} showCompany contactSuggestions={state.contact_suggestions} />
+        {state.client_role_notice && (
+          <p className="mb-3 text-xs text-gray-600" role="status">{state.client_role_notice}</p>
+        )}
+        <ClientDetailsSection
+          client={state.client}
+          dispatch={dispatch}
+          showCompany
+          contactSuggestions={state.contact_suggestions}
+          provenance={provenance}
+        />
       </CollapsibleSection>
       <CollapsibleSection title="Project Details" dense defaultOpen={true}>
-        <ProjectDetailsSection project={state.project} dispatch={dispatch} />
+        <ProjectDetailsSection project={state.project} dispatch={dispatch} provenance={provenance} />
       </CollapsibleSection>
       <CollapsibleSection title="Fee Options" dense defaultOpen={true}>
-        <FeeOptionsSection feeOptions={state.fee_options} engineers={engineers} dispatch={dispatch} />
+        <FeeOptionsSection feeOptions={state.fee_options} engineers={engineers} dispatch={dispatch} provenance={provenance} />
         {account && engineersReady && !accountEngineer && !state.fee_options.engineer_name && (
           <p className="mt-2 text-xs text-gray-600">
             {account.name || account.username} is not on the engineer list, so no engineer was chosen. Pick one above.
