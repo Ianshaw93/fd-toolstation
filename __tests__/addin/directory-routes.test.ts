@@ -2,99 +2,81 @@
  * @jest-environment node
  */
 import { NextRequest } from 'next/server';
-import { GET as searchProjects } from '../../app/synergy/projects/route';
-import { GET as prefill } from '../../app/synergy/projects/[orgId]/[projectId]/fee-proposal-prefill/route';
+import { GET as search } from '../../app/v1/projects/route';
+import { GET as prefill } from '../../app/v1/projects/[id]/fee-proposal-prefill/route';
 
-describe('authenticated directory routes', () => {
+const BASE = 'https://directory-api-production-7f250373.up.railway.app';
+const REF = 'synergy:5466:2694397';
+
+function upstream(status: number, body: unknown = {}) {
+  return jest.fn().mockResolvedValue({
+    status,
+    headers: new Headers({ 'content-type': 'application/json' }),
+    text: async () => JSON.stringify(body),
+  });
+}
+
+describe('same-origin /v1 directory routes', () => {
   const previous = global.fetch;
-
   afterEach(() => {
     global.fetch = previous;
   });
 
-  it('does not serve the invented project list when nobody is signed in', async () => {
+  it('refuses a request with no bearer token and does not call the directory', async () => {
     const fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
-    const response = await searchProjects(new NextRequest('http://localhost/synergy/projects?q=0406'));
-    expect(response.status).toBe(401);
-    const body = await response.json();
-    expect(body.code).toBe('sign_in_required');
-    expect(JSON.stringify(body)).not.toContain('Sarah');
-    expect(JSON.stringify(body)).not.toContain('no_documented_project_contacts_read');
+    expect((await search(new NextRequest('http://localhost/v1/projects?q=0406'))).status).toBe(401);
+    const basic = new NextRequest('http://localhost/v1/projects?q=0406', { headers: { Authorization: 'Basic dXNlcjpwYXNz' } });
+    expect((await search(basic)).status).toBe(401);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('forwards the caller credential to the directory prefill and does not add a key', async () => {
-    const fetchMock = jest.fn().mockResolvedValue({
-      status: 200,
-      headers: new Headers({ 'content-type': 'application/json' }),
-      text: async () => JSON.stringify({ company_name: { value: 'SYNTH Client Ltd', status: 'present', source: 'client_role' } }),
-    });
+  it('forwards only the documented search query and only the bearer header', async () => {
+    const fetchMock = upstream(200, { items: [] });
     global.fetch = fetchMock as unknown as typeof fetch;
-    const response = await prefill(
-      new NextRequest('http://localhost/synergy/projects/5466/2694397/fee-proposal-prefill', {
-        headers: { Authorization: 'Bearer caller-session' },
+    const res = await search(
+      new NextRequest('http://localhost/v1/projects?q=0406&include=inactive%2Carchived&limit=20&offset=0&evil=1', {
+        headers: { Authorization: 'Bearer tok', Cookie: 'session=abc' },
       }),
-      { params: Promise.resolve({ orgId: '5466', projectId: '2694397' }) },
     );
-    expect(response.status).toBe(200);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(200);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(
-      'https://directory-api-production-7f250373.up.railway.app/v1/projects/synergy:5466:2694397/fee-proposal-prefill',
-    );
-    expect(init.headers.Authorization).toBe('Bearer caller-session');
-    expect(JSON.stringify(init.headers)).not.toMatch(/TOTAL_SYNERGY|SYNERGY_ACCESS/);
+    expect(url).toBe(`${BASE}/v1/projects?q=0406&include=inactive%2Carchived&limit=20&offset=0`);
+    expect(init.headers).toEqual({ Accept: 'application/json', Authorization: 'Bearer tok' });
+    expect(init.redirect).toBe('error');
   });
 
-  it('does not forward a credential that is not a bearer token', async () => {
+  it('asks the directory for the canonical id, encoded as the shared client does', async () => {
+    const fetchMock = upstream(200, {});
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const res = await prefill(
+      new NextRequest(`http://localhost/v1/projects/${encodeURIComponent(REF)}/fee-proposal-prefill`, { headers: { Authorization: 'Bearer tok' } }),
+      { params: Promise.resolve({ id: REF }) },
+    );
+    expect(res.status).toBe(200);
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/v1/projects/${encodeURIComponent(REF)}/fee-proposal-prefill`);
+  });
+
+  it('answers 404 for a malformed id without calling the directory', async () => {
     const fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
-    const response = await prefill(
-      new NextRequest('http://localhost/synergy/projects/5466/2694397/fee-proposal-prefill', {
-        headers: { Authorization: 'Basic dXNlcjpwYXNz' },
-      }),
-      { params: Promise.resolve({ orgId: '5466', projectId: '2694397' }) },
+    const res = await prefill(
+      new NextRequest('http://localhost/v1/projects/x/fee-proposal-prefill', { headers: { Authorization: 'Bearer tok' } }),
+      { params: Promise.resolve({ id: '../admin' }) },
     );
-    expect(response.status).toBe(401);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'not_found' });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('rejects a project path that is not a synergy ref', async () => {
-    const fetchMock = jest.fn();
-    global.fetch = fetchMock as unknown as typeof fetch;
-    const response = await prefill(
-      new NextRequest('http://localhost/synergy/projects/5466/..%2Fadmin/fee-proposal-prefill', {
-        headers: { Authorization: 'Bearer caller-session' },
-      }),
-      { params: Promise.resolve({ orgId: '5466', projectId: '../admin' }) },
-    );
-    expect(response.status).toBe(400);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('passes the directory 401 and 503 through unchanged', async () => {
-    for (const status of [401, 503]) {
-      global.fetch = jest.fn().mockResolvedValue({
-        status,
-        headers: new Headers({ 'content-type': 'application/json' }),
-        text: async () => JSON.stringify({ error: status === 401 ? 'unauthorized' : 'not_configured' }),
-      }) as unknown as typeof fetch;
-      const response = await prefill(
-        new NextRequest('http://localhost/synergy/projects/5466/2694397/fee-proposal-prefill', {
-          headers: { Authorization: 'Bearer caller-session' },
-        }),
-        { params: Promise.resolve({ orgId: '5466', projectId: '2694397' }) },
-      );
-      expect(response.status).toBe(status);
+  it('passes 401, 403 and 503 through and returns 502 when the directory is unreachable', async () => {
+    for (const status of [401, 403, 503]) {
+      global.fetch = upstream(status, { error: 'x' }) as unknown as typeof fetch;
+      const res = await search(new NextRequest('http://localhost/v1/projects?q=04', { headers: { Authorization: 'Bearer tok' } }));
+      expect(res.status).toBe(status);
     }
-  });
-
-  it('returns 502 when the directory cannot be reached', async () => {
     global.fetch = jest.fn().mockRejectedValue(new TypeError('fetch failed')) as unknown as typeof fetch;
-    const response = await searchProjects(
-      new NextRequest('http://localhost/synergy/projects?q=0406', { headers: { Authorization: 'Bearer caller-session' } }),
-    );
-    expect(response.status).toBe(502);
+    const res = await search(new NextRequest('http://localhost/v1/projects?q=04', { headers: { Authorization: 'Bearer tok' } }));
+    expect(res.status).toBe(502);
   });
 });

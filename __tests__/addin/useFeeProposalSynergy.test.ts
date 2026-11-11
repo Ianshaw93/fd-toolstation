@@ -1,182 +1,118 @@
 import { renderHook, act } from '@testing-library/react';
 import { useFeeProposal } from '../../hooks/useFeeProposal';
-import { parseFeeEnrichment, SYNERGY_CLIENT_ROLE_ID } from '../../lib/synergy-client-enrichment';
 import { renderFeeProposal } from '../../lib/word-addin-api';
-import { parseFeeProposalPrefillV1 } from '../../lib/directory-prefill';
-import { done0406, LABEL_0406, pending0406, REF_0406 } from '../../test-fixtures/directory-prefill-0406';
+import type { DirectoryProject, FeeProposalPrefill } from '../../lib/vendor/fd-directory-client';
+import { pending0406, project0406, REF_0406, served0406 } from '../../test-fixtures/directory-contract-v1';
 
-const explicitClient = {
-  organisation_id: 5466,
-  synergy_project_id: 1,
-  label: '0001 SYNTH Yard',
-  project_name: 'SYNTH Yard',
-  project_location: '1 Project Road',
-  country: 'EW' as const,
-  client_roles: [
-    {
-      role: 'Client',
-      role_id: SYNERGY_CLIENT_ROLE_ID,
-      company_name: 'SYNTH Client Ltd',
-      address_lines: ['10 Client Street', 'Client Town'],
-      contact: { first_name: 'Ada', surname: 'Lovelace' },
-    },
-  ],
-  engineer_name: null,
-  pii_limit: null,
-  include_hourly_rates: null,
-};
+type Hook = { current: ReturnType<typeof useFeeProposal> };
 
-describe('useFeeProposal with Synergy project link', () => {
-  it('links the project name and leaves client fields for the user when no Client role was returned', () => {
+function other(): DirectoryProject {
+  return { ...project0406(), id: 'synergy:5466:1', synergyProjectId: 1, label: '0001 SYNTH Yard', name: 'SYNTH Yard', numberFormatted: '0001' };
+}
+
+function link(result: Hook, project: DirectoryProject) {
+  act(() => result.current.dispatch({ type: 'LINK_DIRECTORY_PROJECT', project }));
+}
+
+function apply(result: Hook, prefill: FeeProposalPrefill) {
+  act(() => result.current.dispatch({ type: 'APPLY_DIRECTORY_PREFILL', prefill }));
+}
+
+describe('useFeeProposal with the project directory', () => {
+  it('links 0406 by its directory id and fills the project name from the hit', () => {
     const { result } = renderHook(() => useFeeProposal());
-
-    act(() => {
-      result.current.dispatch({
-        type: 'LINK_SYNERGY_PROJECT',
-        synergy_project_id: 2694397,
-        organisation_id: 5466,
-        label: '0406 Former Homebase Site North Finchley',
-        generation: 1,
-        project_name: 'Former Homebase Site North Finchley',
-        project_location: null,
-      });
-    });
-
+    link(result, project0406());
+    expect(result.current.state.synergy_project_ref).toBe(REF_0406);
     expect(result.current.state.project.synergy_project_id).toBe(2694397);
     expect(result.current.state.project.organisation_id).toBe(5466);
+    expect(result.current.state.project.synergy_project_label).toBe('0406 Former Homebase Site North Finchley');
     expect(result.current.state.project.project_name).toBe('Former Homebase Site North Finchley');
-    expect(result.current.state.project.project_location).toBe('');
     expect(result.current.state.client.company_name).toBe('');
-    expect(result.current.state.client.first_name).toBe('');
-    expect(result.current.state.client.surname).toBe('');
-    expect(result.current.state.fee_options.engineer_name).toBe('');
-    expect(result.current.state.client_role_notice).toBeNull();
-
-    const req = result.current.buildRequest();
-    expect(req.project.synergy_project_id).toBe(2694397);
-    expect(req.client.company_name).toBe('');
-    expect(req.client.first_name).toBe('');
   });
 
-  it('preserves existing user-typed inputs when linking a synergy project', () => {
+  it('waits out the pending lookup, then fills the Client-role company and exact address', () => {
     const { result } = renderHook(() => useFeeProposal());
-
-    act(() => {
-      result.current.dispatch({ type: 'SET_PROJECT', field: 'project_name', value: 'My Custom Project Title' });
-      result.current.dispatch({ type: 'SET_PROJECT', field: 'project_location', value: 'London' });
-      result.current.dispatch({ type: 'SET_CLIENT', field: 'company_name', value: 'Typed Company Ltd' });
-      result.current.dispatch({ type: 'SET_CLIENT', field: 'first_name', value: 'Alice' });
-      result.current.dispatch({ type: 'SET_CLIENT', field: 'surname', value: 'Smith' });
-      result.current.dispatch({ type: 'SET_FEE_OPTIONS', field: 'engineer_name', value: 'Thomas O\'Driscoll' });
-    });
-
-    act(() => {
-      result.current.dispatch({
-        type: 'LINK_SYNERGY_PROJECT',
-        synergy_project_id: 2694397,
-        organisation_id: 5466,
-        label: '0406 Former Homebase Site North Finchley',
-        generation: 1,
-        project_name: 'Former Homebase Site North Finchley',
-        project_location: null,
-      });
-    });
-
-    expect(result.current.state.project.project_name).toBe('My Custom Project Title');
-    expect(result.current.state.project.project_location).toBe('London');
-    expect(result.current.state.client.company_name).toBe('Typed Company Ltd');
-    expect(result.current.state.client.first_name).toBe('Alice');
-    expect(result.current.state.client.surname).toBe('Smith');
-    expect(result.current.state.fee_options.engineer_name).toBe('Thomas O\'Driscoll');
-    expect(result.current.state.project.synergy_project_id).toBe(2694397);
-  });
-
-  it('fills the company from an explicit Client role and keeps it off the first name', () => {
-    const { result } = renderHook(() => useFeeProposal());
-    const parsed = parseFeeEnrichment(explicitClient);
-    expect(parsed.ok).toBe(true);
-    if (!parsed.ok) return;
-
-    act(() => {
-      result.current.dispatch({
-        type: 'LINK_SYNERGY_PROJECT',
-        synergy_project_id: 1,
-        organisation_id: 5466,
-        label: '0001 SYNTH Yard',
-        generation: 1,
-        project_name: 'SYNTH Yard',
-        project_location: '1 Project Road',
-      });
-      result.current.dispatch({
-        type: 'APPLY_SYNERGY_ENRICHMENT',
-        generation: 1,
-        enrichment: parsed.enrichment,
-        engineer_names: ['Ada Lovelace'],
-      });
-    });
-
-    expect(result.current.state.client.company_name).toBe('SYNTH Client Ltd');
-    expect(result.current.state.client.first_name).toBe('Ada');
-    expect(result.current.state.client.surname).toBe('Lovelace');
-    expect(result.current.state.client.address_lines[0]).toBe('10 Client Street');
-    expect(result.current.state.client.first_name).not.toBe(result.current.state.client.company_name);
-  });
-
-  it('ignores a client enrichment from an earlier selection', () => {
-    const { result } = renderHook(() => useFeeProposal());
-    const parsed = parseFeeEnrichment(explicitClient);
-    expect(parsed.ok).toBe(true);
-    if (!parsed.ok) return;
-
-    act(() => {
-      result.current.dispatch({
-        type: 'LINK_SYNERGY_PROJECT',
-        synergy_project_id: 2,
-        organisation_id: 5466,
-        label: '0002 SYNTH Other',
-        generation: 2,
-        project_name: 'SYNTH Other',
-        project_location: null,
-      });
-      result.current.dispatch({
-        type: 'APPLY_SYNERGY_ENRICHMENT',
-        generation: 1,
-        enrichment: parsed.enrichment,
-        engineer_names: ['Ada Lovelace'],
-      });
-    });
-
-    expect(result.current.state.project.synergy_project_id).toBe(2);
-    expect(result.current.state.project.project_name).toBe('SYNTH Other');
+    link(result, project0406());
+    apply(result, pending0406());
     expect(result.current.state.client.company_name).toBe('');
-    expect(result.current.state.client.first_name).toBe('');
+    expect(result.current.state.client_role_notice).toMatch(/looking up/i);
+    apply(result, served0406());
+    const { client, project, fee_options } = result.current.state;
+    expect(client.company_name).toBe('Taylor Wimpey North Thames');
+    expect(client.first_name).toBe('');
+    expect(client.surname).toBe('');
+    expect(client.address_lines).toEqual(['The Dock,', 'Station road, Kings Langley', 'Hertfordshire', 'WD4 8LZ', 'United Kingdom', '']);
+    expect(project.project_location).toBe('');
+    expect(project.country).toBe('EW');
+    expect(fee_options.engineer_name).toBe('');
+    expect(fee_options.pii_limit).toBe(100000);
+    expect(fee_options.include_hourly_rates).toBe(false);
+    expect(result.current.state.client_role_notice).toMatch(/home address slot/i);
   });
 
-  it('unlinking clears synergy IDs but keeps typed values intact', () => {
+  it('never touches engineer, location, PII or hourly rates, even if the user set them', () => {
     const { result } = renderHook(() => useFeeProposal());
-
     act(() => {
-      result.current.dispatch({
-        type: 'LINK_SYNERGY_PROJECT',
-        synergy_project_id: 1,
-        organisation_id: 5466,
-        label: '0001 SYNTH Yard',
-        generation: 1,
-        project_name: 'SYNTH Yard',
-        project_location: '1 Project Road',
-      });
+      result.current.dispatch({ type: 'SET_FEE_OPTIONS', field: 'engineer_name', value: 'Ada Lovelace' });
+      result.current.dispatch({ type: 'SET_FEE_OPTIONS', field: 'pii_limit', value: 5000000 });
+      result.current.dispatch({ type: 'SET_PROJECT', field: 'project_location', value: 'Typed site' });
     });
+    link(result, project0406());
+    apply(result, served0406());
+    expect(result.current.state.fee_options.engineer_name).toBe('Ada Lovelace');
+    expect(result.current.state.fee_options.pii_limit).toBe(5000000);
+    expect(result.current.state.project.project_location).toBe('Typed site');
+  });
 
+  it('keeps typed client values', () => {
+    const { result } = renderHook(() => useFeeProposal());
     act(() => {
-      result.current.dispatch({ type: 'UNLINK_SYNERGY_PROJECT' });
+      result.current.dispatch({ type: 'SET_CLIENT', field: 'company_name', value: 'Typed Co' });
+      result.current.dispatch({ type: 'SET_CLIENT', field: 'address_lines', value: ['1 Typed Street', '', '', '', '', ''] });
     });
+    link(result, project0406());
+    apply(result, served0406());
+    expect(result.current.state.client.company_name).toBe('Typed Co');
+    expect(result.current.state.client.address_lines[0]).toBe('1 Typed Street');
+  });
 
-    expect(result.current.state.project.synergy_project_id).toBeUndefined();
-    expect(result.current.state.project.organisation_id).toBeUndefined();
-    expect(result.current.state.project.synergy_project_label).toBeUndefined();
+  it('ignores a prefill for an earlier selection', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    link(result, other());
+    apply(result, served0406());
+    expect(result.current.state.client.company_name).toBe('');
+  });
+
+  it('on a project switch, resets values it filled and keeps values the user edited', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    link(result, project0406());
+    apply(result, served0406());
+    act(() => result.current.dispatch({ type: 'SET_CLIENT', field: 'first_name', value: 'Typed' }));
+    act(() => result.current.dispatch({ type: 'UNLINK_SYNERGY_PROJECT' }));
+    expect(result.current.state.client.company_name).toBe('Taylor Wimpey North Thames');
+    link(result, other());
+    expect(result.current.state.client.company_name).toBe('');
+    expect(result.current.state.client.address_lines.every((line) => line === '')).toBe(true);
+    expect(result.current.state.client.first_name).toBe('Typed');
     expect(result.current.state.project.project_name).toBe('SYNTH Yard');
-    expect(result.current.state.project.project_location).toBe('');
+  });
+
+  it('keeps a company the user changed after it was filled', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    link(result, project0406());
+    apply(result, served0406());
+    act(() => result.current.dispatch({ type: 'SET_CLIENT', field: 'company_name', value: 'Taylor Wimpey UK Ltd' }));
+    link(result, other());
+    expect(result.current.state.client.company_name).toBe('Taylor Wimpey UK Ltd');
+  });
+
+  it('notices only apply to the selected project', () => {
+    const { result } = renderHook(() => useFeeProposal());
+    link(result, project0406());
+    act(() => result.current.dispatch({ type: 'SET_DIRECTORY_NOTICE', ref: 'synergy:5466:1', notice: 'stale' }));
     expect(result.current.state.client_role_notice).toBeNull();
+    act(() => result.current.dispatch({ type: 'SET_DIRECTORY_NOTICE', ref: REF_0406, notice: 'now' }));
+    expect(result.current.state.client_role_notice).toBe('now');
   });
 
   it('generating works without any synergy selection', () => {
@@ -224,74 +160,5 @@ describe('useFeeProposal with Synergy project link', () => {
     expect(body.client.surname).toBe('Lovelace');
     expect(body.client.address_lines).toEqual(['10 Client Street']);
     expect(body.client.first_name).not.toBe(body.client.company_name);
-  });
-});
-
-describe('useFeeProposal with the directory prefill', () => {
-  function link(result: { current: ReturnType<typeof useFeeProposal> }, projectId: number, label: string, generation: number) {
-    result.current.dispatch({
-      type: 'LINK_SYNERGY_PROJECT',
-      synergy_project_id: projectId,
-      organisation_id: 5466,
-      label,
-      generation,
-      project_name: label.slice(5),
-      project_location: null,
-    });
-  }
-
-  function apply(result: { current: ReturnType<typeof useFeeProposal> }, body: unknown) {
-    const parsed = parseFeeProposalPrefillV1(body);
-    if (!parsed.ok) throw new Error('fixture rejected');
-    result.current.dispatch({ type: 'APPLY_DIRECTORY_PREFILL', response: parsed.response, engineer_names: ['Sam Bennett'] });
-  }
-
-  it('fills 0406 from the Client-role company and keeps the synergy ref on the link', () => {
-    const { result } = renderHook(() => useFeeProposal());
-    act(() => link(result, 2694397, LABEL_0406, 1));
-    expect(result.current.state.synergy_project_ref).toBe(REF_0406);
-    act(() => apply(result, pending0406()));
-    expect(result.current.state.client.company_name).toBe('');
-    expect(result.current.state.client_role_notice).toMatch(/looking up/i);
-    act(() => apply(result, done0406()));
-    expect(result.current.state.client.company_name).toBe('Taylor Wimpey North Thames');
-    expect(result.current.state.client.first_name).toBe('');
-    expect(result.current.state.client.address_lines[0]).toBe('The Dock,');
-    expect(result.current.state.fee_options.engineer_name).toBe('');
-    expect(result.current.state.project.country).toBe('EW');
-  });
-
-  it('ignores a prefill for an earlier selection', () => {
-    const { result } = renderHook(() => useFeeProposal());
-    act(() => link(result, 1, '0001 SYNTH Yard', 1));
-    act(() => apply(result, done0406()));
-    expect(result.current.state.client.company_name).toBe('');
-  });
-
-  it('clears values it filled when another project is chosen, and keeps typed ones', () => {
-    const { result } = renderHook(() => useFeeProposal());
-    act(() => link(result, 2694397, LABEL_0406, 1));
-    act(() => apply(result, done0406()));
-    act(() => {
-      result.current.dispatch({ type: 'SET_CLIENT', field: 'first_name', value: 'Typed' });
-    });
-    act(() => result.current.dispatch({ type: 'UNLINK_SYNERGY_PROJECT' }));
-    expect(result.current.state.client.company_name).toBe('Taylor Wimpey North Thames');
-    act(() => link(result, 1, '0001 SYNTH Yard', 2));
-    expect(result.current.state.client.company_name).toBe('');
-    expect(result.current.state.client.address_lines.every((line) => line === '')).toBe(true);
-    expect(result.current.state.client.first_name).toBe('Typed');
-    expect(result.current.state.project.project_name).toBe('SYNTH Yard');
-  });
-
-  it('keeps a company the user edited after it was filled', () => {
-    const { result } = renderHook(() => useFeeProposal());
-    act(() => link(result, 2694397, LABEL_0406, 1));
-    act(() => apply(result, done0406()));
-    act(() => {
-      result.current.dispatch({ type: 'SET_CLIENT', field: 'company_name', value: 'Taylor Wimpey UK Ltd' });
-    });
-    act(() => link(result, 1, '0001 SYNTH Yard', 2));
-    expect(result.current.state.client.company_name).toBe('Taylor Wimpey UK Ltd');
   });
 });
