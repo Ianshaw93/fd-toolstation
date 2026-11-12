@@ -2,18 +2,25 @@
 
 import { Dispatch } from 'react';
 import type { FeeOptions, Engineer } from '../../lib/fee-types';
+import type { FieldProvenance } from '../../lib/field-provenance';
+import SourceBadge from './SourceBadge';
 
 interface Props {
   feeOptions: FeeOptions;
   engineers: Engineer[];
   dispatch: Dispatch<any>;
+  /** Word task pane only: where an autofilled engineer came from. */
+  provenance?: Pick<FieldProvenance, 'engineer'>;
 }
 
-export default function FeeOptionsSection({ feeOptions, engineers, dispatch }: Props) {
+export default function FeeOptionsSection({ feeOptions, engineers, dispatch, provenance }: Props) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Engineer Name</label>
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <label className="block text-sm font-medium text-gray-700">Engineer Name</label>
+          <SourceBadge provenance={provenance?.engineer} testId="source-engineer" />
+        </div>
         <select
           value={feeOptions.engineer_name}
           onChange={(e) => dispatch({ type: 'SET_FEE_OPTIONS', field: 'engineer_name', value: e.target.value })}

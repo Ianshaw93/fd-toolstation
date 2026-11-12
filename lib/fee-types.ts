@@ -23,6 +23,8 @@ export interface ClientDetails {
   first_name: string;
   surname: string;
   address_lines: string[];
+  /** Company assigned the Client role. Not the salutation name. */
+  company_name?: string;
 }
 
 export type CountryCode = 'EW' | 'J' | 'OTHER';
@@ -37,6 +39,10 @@ export interface ProjectDetails {
   // Legislation reference for an 'OTHER' country. Blank falls back to the
   // England/Wales reference.
   legislation: string;
+  // Optional Total Synergy link fields
+  synergy_project_id?: number;
+  organisation_id?: number;
+  synergy_project_label?: string;
 }
 
 export interface FeeOptions {
