@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { errorNotice } from '../../lib/directory-prefill';
 import { NESTED_APP_AUTH_UNAVAILABLE, type FdSignIn } from '../../lib/fd-msal';
 import { logSynergyProjectOpen, searchDirectoryProjects } from '../../lib/synergy-api';
@@ -13,6 +13,8 @@ interface Props {
   onUnlink: () => void;
   /** FD Microsoft sign-in. Omitted in tests that only exercise search. */
   signIn?: FdSignIn;
+  /** Extra content inside the linked-project card, under the project label. */
+  linkedDetail?: ReactNode;
 }
 
 const MIN_QUERY = 2;
@@ -24,7 +26,7 @@ function marker(project: DirectoryProject): string | null {
   return null;
 }
 
-export default function SynergyProjectPicker({ selectedRef, selectedLabel, onSelect, onUnlink, signIn }: Props) {
+export default function SynergyProjectPicker({ selectedRef, selectedLabel, onSelect, onUnlink, signIn, linkedDetail }: Props) {
   const [query, setQuery] = useState('');
   const [includeInactive, setIncludeInactive] = useState(false);
   const [results, setResults] = useState<DirectoryProject[]>([]);
@@ -76,7 +78,7 @@ export default function SynergyProjectPicker({ selectedRef, selectedLabel, onSel
 
   if (selectedRef) {
     return (
-      <div className="rounded-lg border border-sky-200 bg-sky-50/70 p-3 space-y-2">
+      <div data-testid="linked-synergy-project" className="rounded-lg border border-sky-200 bg-sky-50/70 p-3 space-y-2">
         <div className="flex items-center justify-between text-xs text-sky-800">
           <span className="font-semibold flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
@@ -91,6 +93,7 @@ export default function SynergyProjectPicker({ selectedRef, selectedLabel, onSel
           </button>
         </div>
         <div className="text-sm font-semibold text-gray-900 leading-snug">{selectedLabel || 'Selected Project'}</div>
+        {linkedDetail}
       </div>
     );
   }

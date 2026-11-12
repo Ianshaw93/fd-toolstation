@@ -6,6 +6,16 @@
 declare const Word: any;
 declare const Office: any;
 
+import {
+  FEE_PROPOSAL_TITLE_NS,
+  FEE_PROPOSAL_TITLE_PROPERTY,
+  LONG_TITLE_SENTINEL,
+  feeProposalTitleXml,
+  parseFeeProposalTitleXml,
+  planFeeProposalTitle,
+  titleUpdateChanges,
+  type TrackedTitle,
+} from './fee-proposal-document-title';
 import type { Proposal } from './word-addin-api';
 
 export const SECTION_TAG_PREFIX = 'fdg:section:';
@@ -371,6 +381,113 @@ export async function loadDocumentState<T>(key: string): Promise<T | null> {
     result = JSON.parse(text) as T;
   });
   return result;
+}
+
+/** File URL of the open document. Empty when it has never been saved. Null outside Office. */
+export function wordDocumentUrl(): string | null {
+  try {
+    if (typeof Office === 'undefined') return null;
+    const url = Office.context?.document?.url;
+    return typeof url === 'string' ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+// Linking a Synergy project sets the built-in Title so Save As on a new document suggests
+// `<job number> <project name> Fire Dynamics Group Fee Proposal <DD-MM-YY>`. Word will not
+// rename a file that already has a name, and Document.save(fileName) would save or prompt
+// immediately, so a saved document keeps its name and the pane offers the suggestion to copy.
+// A Title the user has typed is left alone unless it still matches the last value we wrote
+// (custom property fdgFeeProposalTitle, or a custom XML part when that value exceeds 255
+// characters). Writes are queued so a quick project change cannot apply an older name last.
+let titleWrites: Promise<void> = Promise.resolve();
+
+function customPropertyValue(properties: any): string | null {
+  let customProperty: string | null = null;
+  for (const item of properties.customProperties.items) {
+    if (item.key === FEE_PROPOSAL_TITLE_PROPERTY) {
+      customProperty = item.value == null ? '' : String(item.value);
+    }
+  }
+  return customProperty;
+}
+
+function writeCustomProperty(properties: any, value: string): void {
+  const existing = properties.customProperties.items.find((item: any) => item.key === FEE_PROPOSAL_TITLE_PROPERTY);
+  if (existing) existing.value = value;
+  else properties.customProperties.add(FEE_PROPOSAL_TITLE_PROPERTY, value);
+}
+
+// Custom XML parts are WordApi 1.4. Titles that fit in a custom property (the normal
+// filename) only need WordApi 1.3, so a 1.3 host never touches customXmlParts.
+async function readTrackedTitle(ctx: any, readXml: boolean): Promise<{ tracked: TrackedTitle; parts: any; properties: any }> {
+  const properties = ctx.document.properties;
+  properties.load('title');
+  properties.customProperties.load('items/key,items/value');
+  const parts = readXml ? ctx.document.customXmlParts.getByNamespace(FEE_PROPOSAL_TITLE_NS) : null;
+  if (parts) parts.load('items');
+  await ctx.sync();
+
+  let customXml: string | null = null;
+  if (parts && parts.items.length > 0) {
+    const xml = parts.items[0].getXml();
+    await ctx.sync();
+    customXml = parseFeeProposalTitleXml(xml.value);
+  }
+
+  return {
+    tracked: {
+      currentTitle: properties.title == null ? '' : String(properties.title),
+      customProperty: customPropertyValue(properties),
+      customXml,
+    },
+    parts,
+    properties,
+  };
+}
+
+async function writeSuggestedDocumentTitle(suggested: string): Promise<'updated' | 'kept'> {
+  let outcome: 'updated' | 'kept' = 'kept';
+  // Long names are stored beside the sentinel in custom XML. Without WordApi 1.4 the
+  // Title can still be set, but it is not tracked, so a later link will not replace it.
+  const canStoreLongTitle = isSetSupported('WordApi', '1.4');
+  await Word.run(async (ctx: any) => {
+    const { tracked, parts, properties } = await readTrackedTitle(ctx, canStoreLongTitle);
+    const update = planFeeProposalTitle(tracked, suggested);
+    if (!titleUpdateChanges(update)) return;
+
+    const needsXml = update.customProperty === LONG_TITLE_SENTINEL || typeof update.customXml === 'string';
+    if (needsXml && !canStoreLongTitle) {
+      if (update.title == null) return;
+      properties.title = update.title;
+      await ctx.sync();
+      outcome = 'updated';
+      return;
+    }
+
+    if (update.title != null) properties.title = update.title;
+    if (update.customProperty != null) writeCustomProperty(properties, update.customProperty);
+    if (parts && update.customXml === null) {
+      for (const part of parts.items) part.delete();
+    } else if (parts && typeof update.customXml === 'string') {
+      for (const part of parts.items) part.delete();
+      ctx.document.customXmlParts.add(feeProposalTitleXml(update.customXml));
+    }
+    await ctx.sync();
+    outcome = 'updated';
+  });
+  return outcome;
+}
+
+export function applySuggestedDocumentTitle(suggested: string): Promise<'updated' | 'kept' | 'unsupported'> {
+  if (typeof Word === 'undefined' || !isSetSupported('WordApi', '1.3')) return Promise.resolve('unsupported');
+  const run = titleWrites.then(() => writeSuggestedDocumentTitle(suggested).catch(() => 'unsupported' as const));
+  titleWrites = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
 export async function updateAllFields(): Promise<number> {
