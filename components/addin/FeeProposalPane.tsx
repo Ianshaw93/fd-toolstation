@@ -6,7 +6,14 @@ import { useFeeProposal } from '../../hooks/useFeeProposal';
 import type { Engineer } from '../../lib/fee-types';
 import { fetchEngineersViaProxy, renderFeeProposal } from '../../lib/word-addin-api';
 import { buildFeeProposalFilename } from '../../lib/fee-proposal-filename';
-import { applySuggestedDocumentTitle, isSetSupported, newDocumentFromBase64, wordDocumentUrl } from '../../lib/word-ops';
+import {
+  applySuggestedDocumentTitle,
+  createNamedFeeProposalDocument,
+  isSetSupported,
+  newDocumentFromBase64,
+  wordDocumentUrl,
+  type NamedProposalResult,
+} from '../../lib/word-ops';
 import SuggestedFilename from './SuggestedFilename';
 import CollapsibleSection from '../fee-proposal/CollapsibleSection';
 import ClientDetailsSection from '../fee-proposal/ClientDetailsSection';
@@ -45,6 +52,17 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
           projectName: linkedNaming.name,
         })
       : null;
+  const [customFilename, setCustomFilename] = useState<string>('');
+  const [isCustomFilename, setIsCustomFilename] = useState<boolean>(false);
+  const [generationResult, setGenerationResult] = useState<NamedProposalResult | null>(null);
+
+  useEffect(() => {
+    if (!isCustomFilename && suggestedFilename) {
+      setCustomFilename(suggestedFilename);
+    }
+  }, [suggestedFilename, isCustomFilename]);
+
+  const activeFilename = (isCustomFilename ? customFilename : (suggestedFilename ?? customFilename)).trim();
   // null outside Word, false for a document that has never been saved, true once it has a URL.
   const [documentSaved, setDocumentSaved] = useState<boolean | null>(null);
 
@@ -78,12 +96,12 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
     setDocumentSaved(url === null ? null : url.trim().length > 0);
   }, [inWord, suggestedFilename]);
 
-  // Set the document Title when the link changes. A saved file cannot be renamed from
+  // Set the document Title when the link changes or filename is edited. A saved file cannot be renamed from
   // Office.js; the suggested name stays in the card so it can be copied.
   useEffect(() => {
-    if (!inWord || !suggestedFilename) return;
-    void applySuggestedDocumentTitle(suggestedFilename).catch(() => undefined);
-  }, [inWord, suggestedFilename]);
+    if (!inWord || !activeFilename) return;
+    void applySuggestedDocumentTitle(activeFilename).catch(() => undefined);
+  }, [inWord, activeFilename]);
 
   const linkProject = (project: DirectoryProject) => {
     lookup.current?.abort();
@@ -120,7 +138,17 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
       if (!isSetSupported('WordApi', '1.3')) {
         throw new Error('This version of Word cannot open a generated document. Update Word (Microsoft 365) and try again.');
       }
+      setGenerationResult(null);
       const b64 = await renderFeeProposal(buildRequest());
+      const filenameToSave = activeFilename || suggestedFilename;
+      if (filenameToSave) {
+        const outcome = await createNamedFeeProposalDocument(filenameToSave, b64);
+        setGenerationResult(outcome);
+        if (outcome.saved) {
+          return `Saved as ${outcome.filename}. Move it to the project folder (e.g. Dropbox).`;
+        }
+        return 'Fee proposal opened as a new document.';
+      }
       await newDocumentFromBase64(b64);
       return 'Fee proposal opened as a new document.';
     });
@@ -135,10 +163,28 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
         onUnlink={() => {
           lookup.current?.abort();
           setLinkedNaming(null);
+          setCustomFilename('');
+          setIsCustomFilename(false);
+          setGenerationResult(null);
           dispatch({ type: 'UNLINK_SYNERGY_PROJECT' });
         }}
         linkedDetail={
-          suggestedFilename ? <SuggestedFilename filename={suggestedFilename} documentSaved={documentSaved} /> : null
+          suggestedFilename ? (
+            <SuggestedFilename
+              filename={isCustomFilename ? customFilename : suggestedFilename}
+              suggestedFilename={suggestedFilename}
+              onChange={(val) => {
+                setCustomFilename(val);
+                setIsCustomFilename(true);
+              }}
+              onReset={() => {
+                setIsCustomFilename(false);
+                if (suggestedFilename) setCustomFilename(suggestedFilename);
+              }}
+              documentSaved={documentSaved}
+              savedResult={generationResult}
+            />
+          ) : null
         }
       />
       <p data-testid="autofill-announcement" className="sr-only" aria-live="polite">{announcement}</p>
