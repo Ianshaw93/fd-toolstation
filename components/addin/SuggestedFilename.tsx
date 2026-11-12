@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createNamedFeeProposalDocument, type NamedProposalResult } from '../../lib/word-ops';
 
 export function suggestedFilenameNote(documentSaved: boolean | null): string {
   if (documentSaved === true) {
@@ -37,13 +38,24 @@ interface Props {
   filename: string;
   /** True when the open Word file already has a path or URL. Null outside Word. */
   documentSaved: boolean | null;
+  /** Document creation handler. Defaults to createNamedFeeProposalDocument from word-ops. */
+  onCreateNamedDocument?: (filename: string) => Promise<NamedProposalResult>;
 }
 
-export default function SuggestedFilename({ filename, documentSaved }: Props) {
+export default function SuggestedFilename({
+  filename,
+  documentSaved,
+  onCreateNamedDocument = createNamedFeeProposalDocument,
+}: Props) {
   const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<NamedProposalResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setCopied(false);
+    setResult(null);
+    setError(null);
   }, [filename]);
 
   useEffect(() => {
@@ -52,11 +64,25 @@ export default function SuggestedFilename({ filename, documentSaved }: Props) {
     return () => window.clearTimeout(timer);
   }, [copied]);
 
+  const handleCreate = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await onCreateNamedDocument(filename);
+      setResult(res);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Could not create named fee proposal document.';
+      setError(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const note = suggestedFilenameNote(documentSaved);
   const copyLabel = copied ? 'Copied suggested filename' : 'Copy suggested filename';
 
   return (
-    <div className="border-t border-sky-200 pt-2 space-y-1" data-testid="suggested-filename-card">
+    <div className="border-t border-sky-200 pt-2 space-y-2" data-testid="suggested-filename-card">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-sky-800">Suggested filename</span>
         <button
@@ -80,6 +106,43 @@ export default function SuggestedFilename({ filename, documentSaved }: Props) {
       <p id="suggested-filename-note" data-testid="suggested-filename-note" className="text-xs text-gray-600">
         {note}
       </p>
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={handleCreate}
+        className="w-full rounded-md bg-sky-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-600 disabled:opacity-50 transition-colors"
+      >
+        {busy ? 'Creating proposal…' : 'Create named proposal'}
+      </button>
+
+      {result?.saved && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50/80 p-2 text-xs text-emerald-900 space-y-1" role="status">
+          <p className="font-semibold flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+            Saved as {result.filename}. Move it to the project folder (e.g. Dropbox).
+          </p>
+          {result.savedLocation && (
+            <p className="text-2xs text-emerald-800 break-all font-mono">
+              Location: {result.savedLocation}
+            </p>
+          )}
+        </div>
+      )}
+
+      {result && !result.saved && (
+        <div className="rounded-md border border-amber-200 bg-amber-50/80 p-2 text-xs text-amber-900 space-y-1" role="status">
+          <p className="font-medium">
+            Opened in a new document. Save As and use the copied filename.
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800" role="alert">
+          {error}
+        </div>
+      )}
     </div>
   );
 }

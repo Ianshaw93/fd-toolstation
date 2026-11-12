@@ -54,6 +54,152 @@ export function isSetSupported(name: string, version: string): boolean {
   }
 }
 
+export interface NamedProposalResult {
+  path: 'A' | 'B' | 'C';
+  saved: boolean;
+  filename: string;
+  savedLocation: string | null;
+}
+
+export function uint8ArrayToBase64(bytes: Uint8Array): string {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(bytes).toString('base64');
+  }
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)));
+  }
+  return btoa(binary);
+}
+
+export function getDocumentBase64(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (typeof Office === 'undefined' || !Office.context?.document?.getFileAsync) {
+      reject(new Error('Office document is not available.'));
+      return;
+    }
+    Office.context.document.getFileAsync(
+      Office.FileType.Compressed,
+      { sliceSize: 65536 },
+      (result: any) => {
+        if (result.status !== Office.AsyncResultStatus?.Succeeded && result.status !== 0) {
+          reject(new Error(result.error?.message || 'Failed to get document file.'));
+          return;
+        }
+        const file = result.value;
+        const sliceCount = file.sliceCount;
+        if (!sliceCount || sliceCount === 0) {
+          file.closeAsync?.(() => {});
+          resolve('');
+          return;
+        }
+        const slices: Uint8Array[] = [];
+
+        const getSlice = (sliceIndex: number) => {
+          file.getSliceAsync(sliceIndex, (sliceResult: any) => {
+            if (sliceResult.status !== Office.AsyncResultStatus?.Succeeded && sliceResult.status !== 0) {
+              file.closeAsync?.(() => {});
+              reject(new Error(sliceResult.error?.message || 'Failed to read document slice.'));
+              return;
+            }
+            const raw = sliceResult.value.data;
+            const chunk = Array.isArray(raw)
+              ? new Uint8Array(raw)
+              : raw instanceof ArrayBuffer
+              ? new Uint8Array(raw)
+              : raw instanceof Uint8Array
+              ? raw
+              : new Uint8Array(raw);
+            slices.push(chunk);
+
+            if (sliceIndex + 1 < sliceCount) {
+              getSlice(sliceIndex + 1);
+            } else {
+              file.closeAsync?.(() => {});
+              const totalLength = slices.reduce((acc, s) => acc + s.length, 0);
+              const combined = new Uint8Array(totalLength);
+              let offset = 0;
+              for (const s of slices) {
+                combined.set(s, offset);
+                offset += s.length;
+              }
+              resolve(uint8ArrayToBase64(combined));
+            }
+          });
+        };
+
+        getSlice(0);
+      }
+    );
+  });
+}
+
+export async function createNamedFeeProposalDocument(name: string): Promise<NamedProposalResult> {
+  if (typeof Office === 'undefined' || typeof Word === 'undefined') {
+    throw new Error('Office or Word is not available.');
+  }
+
+  const canHiddenSave = isSetSupported('WordApiHiddenDocument', '1.5');
+  const canDocumentSave = isSetSupported('WordApi', '1.5');
+  const docUrl = wordDocumentUrl();
+  const isUnsaved = !docUrl || docUrl.trim().length === 0;
+
+  if (canHiddenSave) {
+    // Path A: WordApiHiddenDocument 1.5 (Desktop). Creates document from base64, saves with name, and opens it.
+    const base64 = await getDocumentBase64();
+    let savedLocation: string | null = null;
+    await Word.run(async (ctx: any) => {
+      const saveBehavior = Word.SaveBehavior?.save ?? 'Save';
+      const d = ctx.application.createDocument(base64);
+      d.save(saveBehavior, name);
+      d.open();
+      await ctx.sync();
+
+      if (isSetSupported('WordApiDesktop', '1.4')) {
+        try {
+          d.load('fullName');
+          await ctx.sync();
+          if (d.fullName) savedLocation = String(d.fullName);
+        } catch {
+          // DocumentCreated might not expose fullName
+        }
+      }
+    });
+    return { path: 'A', saved: true, filename: name, savedLocation };
+  }
+
+  if (isUnsaved && canDocumentSave) {
+    // Path B: Document has never been saved and WordApi 1.5 is supported. Save in place without creating a new document.
+    let savedLocation: string | null = null;
+    await Word.run(async (ctx: any) => {
+      const saveBehavior = Word.SaveBehavior?.save ?? 'Save';
+      ctx.document.save(saveBehavior, name);
+      await ctx.sync();
+
+      if (isSetSupported('WordApiDesktop', '1.4')) {
+        try {
+          ctx.document.load('fullName');
+          await ctx.sync();
+          if (ctx.document.fullName) savedLocation = String(ctx.document.fullName);
+        } catch {
+          // ignore
+        }
+      }
+    });
+    return { path: 'B', saved: true, filename: name, savedLocation };
+  }
+
+  // Path C: Fallback. Create and open new document without saving.
+  const base64 = await getDocumentBase64();
+  await Word.run(async (ctx: any) => {
+    const d = ctx.application.createDocument(base64);
+    d.open();
+    await ctx.sync();
+  });
+  return { path: 'C', saved: false, filename: name, savedLocation: null };
+}
+
 export async function newDocumentFromBase64(base64: string): Promise<void> {
   await Word.run(async (ctx: any) => {
     const created = ctx.application.createDocument(base64);
