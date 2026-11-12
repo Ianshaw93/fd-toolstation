@@ -37,7 +37,21 @@ function fakeClient(overrides: Partial<FdMsalClient> = {}): FdMsalClient & { cal
 }
 
 describe('FD Microsoft sign-in for the Word pane (Mail Marshal SSO pattern)', () => {
-  afterEach(() => setDirectoryAccessTokenProvider(null));
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        token: fixtureAccessToken(),
+      }),
+    })) as never;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    setDirectoryAccessTokenProvider(null);
+  });
 
   it('uses the existing shared registration, the FD tenant, and session storage', () => {
     const config = fdMsalConfiguration('https://fd-toolstation.vercel.app/addin/word');

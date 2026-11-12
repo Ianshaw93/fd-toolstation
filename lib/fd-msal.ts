@@ -8,7 +8,6 @@ import type { Configuration } from '@azure/msal-browser';
 import { fixtureAccount, fixtureToken, FD_TENANT_ID, setDirectoryAccessTokenProvider } from './directory-auth';
 import type { FdAccount } from './engineer-identity';
 import { DirectoryError, FD_SHARED_CLIENT_ID } from './vendor/fd-directory-client';
-import { createSessionToken } from './auth-session';
 
 export const SSO_SCOPES = ['openid', 'profile', 'email', 'User.Read'];
 
@@ -65,6 +64,7 @@ export interface StartOptions {
   createStandard: (config: Configuration) => Promise<FdMsalClient>;
   redirectUri?: string;
   startPage?: string;
+  exchangeToken?: (idToken: string) => Promise<{ token: string; email?: string; name?: string } | null>;
 }
 
 export async function startFdSignIn(options: StartOptions): Promise<FdSignIn> {
@@ -105,30 +105,45 @@ export async function startFdSignIn(options: StartOptions): Promise<FdSignIn> {
     const acct = tokenResult.account ?? account();
     const idToken = tokenResult.idToken;
 
-    if (typeof window !== 'undefined' && idToken && typeof fetch === 'function') {
-      try {
-        const res = await fetch('/api/auth/microsoft', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.token) {
+    if (idToken) {
+      if (options.exchangeToken) {
+        try {
+          const data = await options.exchangeToken(idToken);
+          if (data?.token) {
             if (data.email) {
               result.account = { key: data.email, username: data.email, name: data.name ?? null };
             }
             return data.token;
           }
+        } catch {
+          // ignore error and proceed
         }
-      } catch {
-        // Fall back to client-minted session token below
+      } else if (typeof fetch === 'function') {
+        try {
+          const res = await fetch('/api/auth/microsoft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.token) {
+              if (data.email) {
+                result.account = { key: data.email, username: data.email, name: data.name ?? null };
+              } else if (acct) {
+                result.account = { key: acct.homeAccountId || acct.username, username: acct.username, name: acct.name ?? null };
+              }
+              return data.token;
+            }
+          }
+        } catch {
+          // ignore error and proceed
+        }
       }
     }
 
     if (acct) {
       result.account = { key: acct.homeAccountId || acct.username, username: acct.username, name: acct.name ?? null };
-      return createSessionToken({ email: acct.username, name: acct.name || acct.username.split('@')[0] });
     }
 
     throw new DirectoryError('no_access_token');
