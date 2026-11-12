@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useFeeProposal } from '../../hooks/useFeeProposal';
 import type { Engineer } from '../../lib/fee-types';
 import { fetchEngineersViaProxy, renderFeeProposal } from '../../lib/word-addin-api';
-import { isSetSupported, newDocumentFromBase64 } from '../../lib/word-ops';
+import { buildFeeProposalFilename } from '../../lib/fee-proposal-filename';
+import { applySuggestedDocumentTitle, isSetSupported, newDocumentFromBase64, wordDocumentUrl } from '../../lib/word-ops';
+import SuggestedFilename from './SuggestedFilename';
 import CollapsibleSection from '../fee-proposal/CollapsibleSection';
 import ClientDetailsSection from '../fee-proposal/ClientDetailsSection';
 import ProjectDetailsSection from '../fee-proposal/ProjectDetailsSection';
@@ -34,7 +36,17 @@ interface Props {
 export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
   const { state, dispatch, totalFee, buildRequest } = useFeeProposal();
   const [engineers, setEngineers] = useState<Engineer[]>([]);
+  const [linkedNaming, setLinkedNaming] = useState<{ numberFormatted: string | null; name: string | null } | null>(null);
   const lookup = useRef<AbortController | null>(null);
+  const suggestedFilename =
+    state.synergy_project_ref && linkedNaming
+      ? buildFeeProposalFilename({
+          numberFormatted: linkedNaming.numberFormatted,
+          projectName: linkedNaming.name,
+        })
+      : null;
+  // null outside Word, false for a document that has never been saved, true once it has a URL.
+  const [documentSaved, setDocumentSaved] = useState<boolean | null>(null);
 
   useEffect(() => {
     fetchEngineersViaProxy().then(setEngineers).catch(() => setEngineers([]));
@@ -57,11 +69,28 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
     dispatch({ type: 'APPLY_ACCOUNT_ENGINEER', accountKey, engineer: accountEngineer });
   }, [accountKey, accountEngineer, engineersReady, dispatch]);
 
+  useEffect(() => {
+    if (!inWord) {
+      setDocumentSaved(null);
+      return;
+    }
+    const url = wordDocumentUrl();
+    setDocumentSaved(url === null ? null : url.trim().length > 0);
+  }, [inWord, suggestedFilename]);
+
+  // Set the document Title when the link changes. A saved file cannot be renamed from
+  // Office.js; the suggested name stays in the card so it can be copied.
+  useEffect(() => {
+    if (!inWord || !suggestedFilename) return;
+    void applySuggestedDocumentTitle(suggestedFilename).catch(() => undefined);
+  }, [inWord, suggestedFilename]);
+
   const linkProject = (project: DirectoryProject) => {
     lookup.current?.abort();
     const controller = new AbortController();
     lookup.current = controller;
     const ref = project.id;
+    setLinkedNaming({ numberFormatted: project.numberFormatted, name: project.name });
     dispatch({ type: 'LINK_DIRECTORY_PROJECT', project });
     void pollFeeProposalPrefill(ref, {
       fetchPrefill: fetchFeeProposalPrefill,
@@ -105,8 +134,12 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
         onSelect={linkProject}
         onUnlink={() => {
           lookup.current?.abort();
+          setLinkedNaming(null);
           dispatch({ type: 'UNLINK_SYNERGY_PROJECT' });
         }}
+        linkedDetail={
+          suggestedFilename ? <SuggestedFilename filename={suggestedFilename} documentSaved={documentSaved} /> : null
+        }
       />
       <p data-testid="autofill-announcement" className="sr-only" aria-live="polite">{announcement}</p>
 
