@@ -2,6 +2,7 @@
 // session (from cookie or session token). Calls the directory with a server-only service
 // credential (TOOLSTATION_SERVICE_KEY) and forwards the signed-in user's email as audit context.
 
+import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { ADDIN_SESSION_COOKIE, verifySessionToken, type AddinSession } from './auth-session';
 
@@ -13,8 +14,13 @@ export function directoryApiBase(): string {
   return (process.env.DIRECTORY_API_BASE || DEFAULT_DIRECTORY_API_BASE).replace(/\/$/, '');
 }
 
-export function toolstationServiceKey(): string {
-  return process.env.TOOLSTATION_SERVICE_KEY || 'toolstation-service-dev-key';
+const DEV_SERVICE_KEY = 'toolstation-service-dev-key';
+
+export function toolstationServiceKey(): string | null {
+  const configured = process.env.TOOLSTATION_SERVICE_KEY;
+  if (typeof configured === 'string' && configured.length > 0) return configured;
+  if (process.env.NODE_ENV === 'production') return null;
+  return DEV_SERVICE_KEY;
 }
 
 export function callerSession(req: NextRequest): AddinSession | null {
@@ -53,6 +59,9 @@ export function directoryPrefillUrl(id: string): string {
 
 export async function forwardToDirectory(url: string, userEmail: string): Promise<NextResponse> {
   const serviceKey = toolstationServiceKey();
+  if (!serviceKey) {
+    return NextResponse.json({ error: 'directory_not_configured' }, { status: 503 });
+  }
   let upstream: Response;
   try {
     upstream = await fetch(url, {

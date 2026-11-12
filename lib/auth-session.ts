@@ -1,5 +1,7 @@
 // Session cookie and signed session token for the Word add-in task pane.
+// Server-only: the signing key and the token minting must never reach the client bundle.
 
+import 'server-only';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { isFdEmail } from './msauth';
 import { FD_SHARED_CLIENT_ID } from './vendor/fd-directory-client';
@@ -16,8 +18,15 @@ export interface AddinSession {
   exp: number;
 }
 
+const DEV_SESSION_SECRET = 'fd-toolstation-session-secret';
+
 function sessionSigningKey(): string {
-  return process.env.AUTH_SECRET || process.env.APP_PASSWORD || 'fd-toolstation-session-secret';
+  const configured = process.env.AUTH_SECRET || process.env.APP_PASSWORD;
+  if (configured) return configured;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('session_secret_unconfigured');
+  }
+  return DEV_SESSION_SECRET;
 }
 
 function hmac(payload: string, key: string): string {
@@ -38,16 +47,18 @@ function constantTimeEqual(a: string, b: string): boolean {
  * Signature: HMAC-SHA256
  */
 export function createSessionToken(identity: { email: string; name: string; objectId?: string }): string {
+  const email = identity.email.trim().toLowerCase();
+  if (!isFdEmail(email)) throw new Error('not_an_fd_address');
   const now = Math.floor(Date.now() / 1000);
   const exp = now + SESSION_MAX_AGE_SECONDS;
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const payload = Buffer.from(
     JSON.stringify({
-      email: identity.email,
+      email,
       name: identity.name,
       objectId: identity.objectId,
-      preferred_username: identity.email,
-      sub: identity.objectId ?? identity.email,
+      preferred_username: email,
+      sub: identity.objectId ?? email,
       oid: identity.objectId,
       tid: FD_TENANT_ID,
       aud: `api://${FD_SHARED_CLIENT_ID}`,
@@ -65,17 +76,25 @@ export function verifySessionToken(token: string | null | undefined): AddinSessi
   const parts = token.split('.');
   if (parts.length !== 3) return null;
   const [header, payload, signature] = parts;
-  const expectedSig = hmac(`${header}.${payload}`, sessionSigningKey());
+  let key: string;
+  try {
+    key = sessionSigningKey();
+  } catch {
+    return null;
+  }
+  const expectedSig = hmac(`${header}.${payload}`, key);
   if (!constantTimeEqual(signature, expectedSig)) return null;
 
   try {
     const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    if (!isFdEmail(data.email)) return null;
+    const email = typeof data.email === 'string' ? data.email.trim().toLowerCase() : '';
+    if (!isFdEmail(email)) return null;
     const now = Math.floor(Date.now() / 1000);
-    if (typeof data.exp === 'number' && data.exp <= now) return null;
+    if (typeof data.exp !== 'number' || !Number.isFinite(data.exp) || data.exp <= now) return null;
+    if (typeof data.iat !== 'number' || !Number.isFinite(data.iat)) return null;
     return {
-      email: data.email,
-      name: data.name || data.email.split('@')[0],
+      email,
+      name: data.name || email.split('@')[0],
       objectId: data.objectId,
       iat: data.iat,
       exp: data.exp,
@@ -93,8 +112,9 @@ export function sessionCookieAttributes(request: Request): {
   path: string;
   maxAge: number;
 } {
-  const proto = request.headers.get('x-forwarded-proto') ?? new URL(request.url).protocol.replace(':', '');
-  const secure = proto === 'https';
+  const forwarded = request.headers.get('x-forwarded-proto');
+  const raw = forwarded ?? new URL(request.url).protocol.replace(/:$/, '');
+  const secure = raw.split(',')[0]?.trim().toLowerCase() === 'https';
   return {
     name: ADDIN_SESSION_COOKIE,
     httpOnly: true,

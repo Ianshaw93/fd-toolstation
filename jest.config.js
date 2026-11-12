@@ -14,5 +14,6 @@ module.exports = {
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
+    '^server-only$': '<rootDir>/test-fixtures/server-only-stub.ts',
   },
 };

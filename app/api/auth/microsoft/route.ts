@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { verifyMicrosoftIdToken } from '../../../../lib/msauth';
-import { createSessionToken, sessionCookieAttributes, type AddinSession } from '../../../../lib/auth-session';
+import { createSessionToken, sessionCookieAttributes } from '../../../../lib/auth-session';
 
 interface RequestBody {
   idToken?: string;
@@ -29,7 +29,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const sessionToken = createSessionToken(identity);
+  let sessionToken: string;
+  try {
+    sessionToken = createSessionToken(identity);
+  } catch (err) {
+    console.error('microsoft login: session could not be created:', err instanceof Error ? err.message : 'error');
+    return NextResponse.json({ message: 'Sign-in is not configured.' }, { status: 500 });
+  }
   const cookieAttrs = sessionCookieAttributes(request);
 
   const response = NextResponse.json({
