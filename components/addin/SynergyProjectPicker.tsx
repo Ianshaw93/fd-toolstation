@@ -101,11 +101,22 @@ export default function SynergyProjectPicker({ selectedRef, selectedLabel, onSel
         <label htmlFor="synergy-search-input" className="block text-xs font-semibold text-gray-700">
           Synergy Project <span className="font-normal text-gray-500">(Optional)</span>
         </label>
-        {stale && (
-          <span className="text-2xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200">
-            Directory sync is stale
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {signIn?.state === 'signed_in' && signIn.account && (
+            <span
+              className="text-2xs text-emerald-700 flex items-center gap-1 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200"
+              title={`Signed in as ${signIn.account.username}`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              {signIn.account.name || signIn.account.username}
+            </span>
+          )}
+          {stale && (
+            <span className="text-2xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200">
+              Directory sync is stale
+            </span>
+          )}
+        </div>
       </div>
 
       {signIn && signIn.state === 'needs_sign_in' && (

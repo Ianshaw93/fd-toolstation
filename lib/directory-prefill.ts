@@ -139,8 +139,9 @@ export function errorNotice(code: DirectoryErrorCode): string {
   switch (code) {
     case 'interaction_required':
     case 'no_access_token':
-    case 'unauthorized':
       return 'Sign in with Microsoft to use the project directory. Fill in details by hand meanwhile.';
+    case 'unauthorized':
+      return 'The project directory did not authorise this request. Check that the service key is configured in Railway.';
     case 'not_an_access_token':
     case 'wrong_audience':
       return 'The Microsoft sign-in did not give a project directory token. Fill in details by hand.';
