@@ -79,6 +79,24 @@ describe('FD Microsoft sign-in for the Word pane', () => {
     await expect(getDirectoryAccessToken()).resolves.toMatch(/\./);
   });
 
+  it('inside Word, asks for sign in when silent token acquisition returns no access token (e.g. initial silent failure)', async () => {
+    let signedIn = false;
+    const client = fakeClient({
+      acquireTokenSilent: async () => {
+        if (!signedIn) throw new Error('no_tokens_found');
+        return { accessToken: fixtureAccessToken(), idToken: 'x', account: ACCOUNT };
+      },
+      acquireTokenPopup: async () => {
+        signedIn = true;
+        return { accessToken: fixtureAccessToken(), idToken: 'x', account: ACCOUNT };
+      },
+    });
+    const result = await startFdSignIn({ host: 'word', nestedAppAuth: true, createNested: async () => client, createStandard: jest.fn() });
+    expect(result.state).toBe('needs_sign_in');
+    await expect(result.signIn()).resolves.toBe('signed_in');
+    await expect(getDirectoryAccessToken()).resolves.toMatch(/\./);
+  });
+
   it('inside Word without nested app auth, reports exactly that instead of opening another sign-in', async () => {
     const createStandard = jest.fn();
     const result = await startFdSignIn({ host: 'word', nestedAppAuth: false, createNested: jest.fn(), createStandard });

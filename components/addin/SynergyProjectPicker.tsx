@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { errorNotice } from '../../lib/directory-prefill';
-import type { FdSignIn } from '../../lib/fd-msal';
+import { NESTED_APP_AUTH_UNAVAILABLE, type FdSignIn } from '../../lib/fd-msal';
 import { logSynergyProjectOpen, searchDirectoryProjects } from '../../lib/synergy-api';
 import { DirectoryError, type DirectoryProject } from '../../lib/vendor/fd-directory-client';
 
@@ -111,6 +111,9 @@ export default function SynergyProjectPicker({ selectedRef, selectedLabel, onSel
       {signIn && signIn.state === 'needs_sign_in' && (
         <div className="rounded-md border border-sky-200 bg-white p-2.5 text-xs text-gray-700 space-y-2">
           <p>Sign in with Microsoft to search the project directory. Your FD account is used; nothing else is created.</p>
+          {signIn.reason && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">{signIn.reason}</p>
+          )}
           <button
             type="button"
             onClick={() => void signIn.signIn()}
@@ -120,8 +123,19 @@ export default function SynergyProjectPicker({ selectedRef, selectedLabel, onSel
           </button>
         </div>
       )}
-      {signIn && signIn.state === 'unavailable' && signIn.reason && (
-        <p className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">{signIn.reason}</p>
+      {signIn && signIn.state === 'unavailable' && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900 space-y-2">
+          {signIn.reason && <p>{signIn.reason}</p>}
+          {signIn.reason !== NESTED_APP_AUTH_UNAVAILABLE && (
+            <button
+              type="button"
+              onClick={() => void signIn.signIn()}
+              className="px-3 py-1.5 rounded-md bg-amber-900 text-white font-medium"
+            >
+              Try signing in
+            </button>
+          )}
+        </div>
       )}
       {signIn && signIn.state === 'checking' && <p className="text-xs text-gray-500">Checking your Microsoft sign-in…</p>}
 

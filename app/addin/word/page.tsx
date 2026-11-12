@@ -113,6 +113,7 @@ export default function WordAddinPage() {
         reason: result.reason,
         account: result.account,
         signIn: async (): Promise<FdSignInState> => {
+          setSignIn((prev) => ({ ...prev, state: 'checking', reason: null }));
           const state = await result.signIn();
           publish(result);
           return state;

@@ -95,13 +95,22 @@ export async function startFdSignIn(options: StartOptions): Promise<FdSignIn> {
     return { state: 'unavailable', reason: msalFailure(error), account: null, signIn: async () => 'unavailable' };
   }
 
+  let activeToken: string | null = null;
   const account = () => client.getActiveAccount() ?? client.getAllAccounts()[0] ?? undefined;
   // The shared provider returns only the access token; keep the account MSAL returned with it.
   const recording = {
     acquireTokenSilent: async (request: { scopes: string[]; account?: never }) => {
-      const token = await client.acquireTokenSilent(request);
-      if (token.account) client.setActiveAccount(token.account);
-      return token;
+      try {
+        const token = await client.acquireTokenSilent(request);
+        if (token.account) client.setActiveAccount(token.account);
+        if (token.accessToken) activeToken = token.accessToken;
+        return token;
+      } catch (err) {
+        if (activeToken) {
+          return { accessToken: activeToken, account: account() ?? null };
+        }
+        throw err;
+      }
     },
   };
   const provider = msalAccessTokenProvider(recording, account);
@@ -114,13 +123,16 @@ export async function startFdSignIn(options: StartOptions): Promise<FdSignIn> {
     try {
       await provider();
     } catch (error) {
-      if (error instanceof DirectoryError && error.code === 'interaction_required') return 'needs_sign_in';
+      if (error instanceof DirectoryError && (error.code === 'interaction_required' || error.code === 'no_access_token')) {
+        return 'needs_sign_in';
+      }
       result.reason = msalFailure(error);
       return 'unavailable';
     }
     const signedIn = account();
     if (signedIn) client.setActiveAccount(signedIn);
     result.account = signedIn ? { key: signedIn.homeAccountId, username: signedIn.username, name: signedIn.name ?? null } : null;
+    result.reason = null;
     setDirectoryAccessTokenProvider(provider);
     return 'signed_in';
   };
@@ -130,6 +142,7 @@ export async function startFdSignIn(options: StartOptions): Promise<FdSignIn> {
       if (options.host === 'word') {
         const popup = await client.acquireTokenPopup({ scopes: [FD_DIRECTORY_SCOPE] });
         if (popup.account) client.setActiveAccount(popup.account);
+        if (popup.accessToken) activeToken = popup.accessToken;
       } else {
         await client.loginRedirect({
           scopes: [FD_DIRECTORY_SCOPE],
