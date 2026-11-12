@@ -1,63 +1,37 @@
-// Shared Total Synergy project directory client for the Word add-in task pane.
-// Calls the same-origin /synergy/projects endpoints (which in local dev return mock
-// directory hits, and in production proxy to the shared authenticated email-search service).
+// Project directory calls for the Word add-in task pane, through the shared FD directory
+// client. Its base URL is this app's origin: the same-origin /v1 routes forward the bearer
+// token to the directory API (whose CORS does not list this origin). No Synergy key here.
 
-export interface SynergyProjectHit {
-  synergy_project_id: number;
-  organisation_id: number;
-  label: string;
-  status: string | null;
-  active: boolean;
-  name?: string;
-  project_number?: string | null;
-  location?: string | null;
-  client_name?: string | null;
-  manager?: string | null;
+import { getDirectoryAccessToken } from './directory-auth';
+import {
+  createDirectoryClient,
+  type DirectoryClient,
+  type FeeProposalPrefill,
+  type SearchResult,
+} from './vendor/fd-directory-client';
+
+let client: DirectoryClient | null = null;
+
+function directory(): DirectoryClient {
+  if (!client) client = createDirectoryClient({ baseUrl: window.location.origin, getAccessToken: getDirectoryAccessToken });
+  return client;
 }
 
-export interface SynergyCacheStatus {
-  stale: boolean;
-  last_success_at: string | null;
-  last_attempt_at: string | null;
-  last_error: string | null;
-}
-
-export interface SynergySearchResponse {
-  items: SynergyProjectHit[];
-  cache: SynergyCacheStatus;
-  result_total: number;
-}
-
-/**
- * Searches the Synergy project directory cache by job number or project name.
- * Default hides inactive and archived records unless includeInactive is true.
- */
-export async function searchSynergyProjects(
+/** Picker search: `include=inactive,archived` when the toggle is on, 20 results. */
+export function searchDirectoryProjects(
   query: string,
-  includeInactive = false,
-  limit = 20
-): Promise<SynergySearchResponse> {
-  const params = new URLSearchParams({
-    q: query,
-    include_inactive: String(includeInactive),
-    limit: String(limit),
+  options: { includeInactive: boolean; signal?: AbortSignal },
+): Promise<SearchResult> {
+  return directory().search(query, {
+    includeInactive: options.includeInactive,
+    includeArchived: options.includeInactive,
+    limit: 20,
+    signal: options.signal,
   });
+}
 
-  const res = await fetch(`/synergy/projects?${params.toString()}`, {
-    headers: {
-      Accept: 'application/json',
-    },
-  });
-
-  if (!res.ok) {
-    if (res.status === 401) {
-      throw new Error('Authentication required for Synergy project directory.');
-    }
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || err.message || `Synergy directory error (${res.status})`);
-  }
-
-  return res.json();
+export function fetchFeeProposalPrefill(ref: string, signal?: AbortSignal): Promise<FeeProposalPrefill | null> {
+  return directory().feeProposalPrefill(ref, signal);
 }
 
 /**

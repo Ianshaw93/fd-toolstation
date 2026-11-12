@@ -1,91 +1,80 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  searchSynergyProjects,
-  logSynergyProjectOpen,
-  type SynergyProjectHit,
-  type SynergyCacheStatus,
-} from '../../lib/synergy-api';
+import { useEffect, useRef, useState } from 'react';
+import { errorNotice } from '../../lib/directory-prefill';
+import type { FdSignIn } from '../../lib/fd-msal';
+import { logSynergyProjectOpen, searchDirectoryProjects } from '../../lib/synergy-api';
+import { DirectoryError, type DirectoryProject } from '../../lib/vendor/fd-directory-client';
 
 interface Props {
-  selectedId?: number;
-  selectedOrgId?: number;
+  selectedRef?: string | null;
   selectedLabel?: string;
-  onSelect: (hit: SynergyProjectHit) => void;
+  onSelect: (project: DirectoryProject) => void;
   onUnlink: () => void;
+  /** FD Microsoft sign-in. Omitted in tests that only exercise search. */
+  signIn?: FdSignIn;
 }
 
-export default function SynergyProjectPicker({
-  selectedId,
-  selectedOrgId,
-  selectedLabel,
-  onSelect,
-  onUnlink,
-}: Props) {
+const MIN_QUERY = 2;
+
+function marker(project: DirectoryProject): string | null {
+  if (project.missingSince) return 'Missing in Synergy';
+  if (project.isArchived) return 'Archived';
+  if (project.isActive === false) return 'Inactive';
+  return null;
+}
+
+export default function SynergyProjectPicker({ selectedRef, selectedLabel, onSelect, onUnlink, signIn }: Props) {
   const [query, setQuery] = useState('');
   const [includeInactive, setIncludeInactive] = useState(false);
-  const [results, setResults] = useState<SynergyProjectHit[]>([]);
-  const [cacheStatus, setCacheStatus] = useState<SynergyCacheStatus | null>(null);
+  const [results, setResults] = useState<DirectoryProject[]>([]);
+  const [stale, setStale] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
-
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const performSearch = useCallback(async (q: string, inactive: boolean) => {
-    if (!q.trim()) {
-      setResults([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await searchSynergyProjects(q, inactive);
-      setResults(res.items);
-      setCacheStatus(res.cache);
-    } catch (err: any) {
-      setError(err.message || 'Failed to search Synergy directory');
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const canSearch = !signIn || signIn.state === 'signed_in';
 
   useEffect(() => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    if (!query.trim()) {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    const q = query.trim();
+    if (q.length < MIN_QUERY || !canSearch) {
       setResults([]);
       setLoading(false);
       return;
     }
-
-    searchTimeoutRef.current = setTimeout(() => {
-      performSearch(query, includeInactive);
+    const controller = new AbortController();
+    searchTimeoutRef.current = setTimeout(async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const page = await searchDirectoryProjects(q, { includeInactive, signal: controller.signal });
+        setResults(page.items);
+        setStale(page.meta.stale);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        setError(err instanceof DirectoryError ? errorNotice(err.code) : 'The project directory could not be reached.');
+        setResults([]);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
     }, 250);
-
     return () => {
+      controller.abort();
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     };
-  }, [query, includeInactive, performSearch]);
+  }, [query, includeInactive, canSearch]);
 
-  const handleSelect = (hit: SynergyProjectHit, rank: number) => {
-    onSelect(hit);
-    logSynergyProjectOpen(hit.organisation_id, hit.synergy_project_id, rank);
+  const handleSelect = (project: DirectoryProject, rank: number) => {
+    onSelect(project);
+    logSynergyProjectOpen(project.organisationId, project.synergyProjectId, rank);
     setIsSearching(false);
     setQuery('');
     setResults([]);
   };
 
-  const isLinked = selectedId !== undefined && selectedId !== null;
-
-  if (isLinked) {
+  if (selectedRef) {
     return (
       <div className="rounded-lg border border-sky-200 bg-sky-50/70 p-3 space-y-2">
         <div className="flex items-center justify-between text-xs text-sky-800">
@@ -101,12 +90,7 @@ export default function SynergyProjectPicker({
             Change / Unlink
           </button>
         </div>
-
-        <div>
-          <div className="text-sm font-semibold text-gray-900 leading-snug">
-            {selectedLabel || 'Selected Project'}
-          </div>
-        </div>
+        <div className="text-sm font-semibold text-gray-900 leading-snug">{selectedLabel || 'Selected Project'}</div>
       </div>
     );
   }
@@ -117,12 +101,29 @@ export default function SynergyProjectPicker({
         <label htmlFor="synergy-search-input" className="block text-xs font-semibold text-gray-700">
           Synergy Project <span className="font-normal text-gray-500">(Optional)</span>
         </label>
-        {cacheStatus?.stale && (
+        {stale && (
           <span className="text-2xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200">
-            Cache stale
+            Directory sync is stale
           </span>
         )}
       </div>
+
+      {signIn && signIn.state === 'needs_sign_in' && (
+        <div className="rounded-md border border-sky-200 bg-white p-2.5 text-xs text-gray-700 space-y-2">
+          <p>Sign in with Microsoft to search the project directory. Your FD account is used; nothing else is created.</p>
+          <button
+            type="button"
+            onClick={() => void signIn.signIn()}
+            className="px-3 py-1.5 rounded-md bg-gray-900 text-white font-medium"
+          >
+            Sign in with Microsoft
+          </button>
+        </div>
+      )}
+      {signIn && signIn.state === 'unavailable' && signIn.reason && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">{signIn.reason}</p>
+      )}
+      {signIn && signIn.state === 'checking' && <p className="text-xs text-gray-500">Checking your Microsoft sign-in…</p>}
 
       <div className="relative">
         <input
@@ -137,7 +138,6 @@ export default function SynergyProjectPicker({
           placeholder="Search by job # or name (e.g. 0657)…"
           className="w-full px-3 py-2 text-sm rounded-md bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
         />
-
         {query && (
           <button
             type="button"
@@ -165,46 +165,37 @@ export default function SynergyProjectPicker({
         </label>
       </div>
 
-      {/* Results Dropdown */}
-      {isSearching && query.trim() !== '' && (
+      {isSearching && query.trim().length >= MIN_QUERY && canSearch && (
         <div className="rounded-md border border-gray-200 bg-white shadow-sm divide-y divide-gray-100 max-h-48 overflow-y-auto">
           {loading ? (
-            <div className="p-3 text-xs text-gray-500 text-center">Searching Synergy directory…</div>
+            <div className="p-3 text-xs text-gray-500 text-center">Searching the project directory…</div>
           ) : error ? (
             <div className="p-3 text-xs text-rose-600">{error}</div>
           ) : results.length === 0 ? (
-            <div className="p-3 text-xs text-gray-500">
-              No matching Synergy projects found. You can enter details manually below.
-            </div>
+            <div className="p-3 text-xs text-gray-500">No matching projects. You can enter details manually below.</div>
           ) : (
-            results.map((hit, idx) => (
-              <button
-                key={hit.synergy_project_id}
-                type="button"
-                onClick={() => handleSelect(hit, idx)}
-                className="w-full text-left p-2.5 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-900">{hit.label}</span>
-                  {hit.status && (
-                    <span
-                      className={`text-2xs px-1.5 py-0.5 rounded font-medium ${
-                        hit.active
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-gray-100 text-gray-600 border border-gray-200'
-                      }`}
-                    >
-                      {hit.status}
-                    </span>
-                  )}
-                </div>
-                {hit.location && (
-                  <div className="text-2xs text-gray-500 mt-0.5">
-                    {hit.location}
+            results.map((project, idx) => {
+              const flag = marker(project);
+              return (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => handleSelect(project, idx)}
+                  className="w-full text-left p-2.5 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-gray-900">{project.label}</span>
+                    {flag ? (
+                      <span className="text-2xs px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-600 border border-gray-200">{flag}</span>
+                    ) : project.status.name ? (
+                      <span className="text-2xs px-1.5 py-0.5 rounded font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        {project.status.name}
+                      </span>
+                    ) : null}
                   </div>
-                )}
-              </button>
-            ))
+                </button>
+              );
+            })
           )}
         </div>
       )}

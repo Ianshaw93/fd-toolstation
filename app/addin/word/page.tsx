@@ -16,6 +16,7 @@ import {
   type Source,
 } from '../../../lib/word-addin-api';
 import FeeProposalPane from '../../../components/addin/FeeProposalPane';
+import { startFdSignIn, type FdSignIn, type FdSignInState } from '../../../lib/fd-msal';
 import {
   applyCitations,
   insertSectionAtCursor,
@@ -100,6 +101,34 @@ export default function WordAddinPage() {
   const [existingSummary, setExistingSummary] = useState<string>('');
 
   const say = useCallback((line: string) => setLog((prev) => [line, ...prev].slice(0, 12)), []);
+
+  const [signIn, setSignIn] = useState<FdSignIn>({ state: 'checking', reason: null, account: null, signIn: async () => 'checking' });
+  useEffect(() => {
+    if (host === 'loading') return;
+    let cancelled = false;
+    const publish = (result: FdSignIn) => {
+      if (cancelled) return;
+      setSignIn({
+        state: result.state,
+        reason: result.reason,
+        account: result.account,
+        signIn: async (): Promise<FdSignInState> => {
+          const state = await result.signIn();
+          publish(result);
+          return state;
+        },
+      });
+    };
+    startFdSignIn({
+      host,
+      nestedAppAuth: host === 'word' && isSetSupported('NestedAppAuth', '1.1'),
+      createNested: async (config) => (await import('@azure/msal-browser')).createNestablePublicClientApplication(config),
+      createStandard: async (config) => new (await import('@azure/msal-browser')).PublicClientApplication(config),
+    }).then(publish);
+    return () => {
+      cancelled = true;
+    };
+  }, [host]);
 
   const boot = useCallback(async () => {
     restoreHistory();
@@ -263,7 +292,7 @@ export default function WordAddinPage() {
 
       {tab === 'fee' && (
         <main className="px-4 py-3">
-          <FeeProposalPane inWord={inWord} busy={busy} run={run} />
+          <FeeProposalPane inWord={inWord} busy={busy} run={run} signIn={signIn} />
           <section className="mt-4">
             <h2 className="font-medium mb-1">Log</h2>
             <ul className="text-xs text-gray-600 space-y-0.5 font-mono">

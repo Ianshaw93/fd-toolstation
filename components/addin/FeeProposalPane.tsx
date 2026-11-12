@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useFeeProposal } from '../../hooks/useFeeProposal';
 import type { Engineer } from '../../lib/fee-types';
@@ -13,6 +13,12 @@ import FeeOptionsSection from '../fee-proposal/FeeOptionsSection';
 import StageCards from './StageCards';
 import SynergyProjectPicker from './SynergyProjectPicker';
 import { SERVICE_LABELS_1_4, SERVICE_LABELS_5, SERVICE_LABELS_6 } from '../../lib/fee-constants';
+import { outcomeNotice, pollFeeProposalPrefill } from '../../lib/directory-prefill';
+import type { FdSignIn } from '../../lib/fd-msal';
+import { fetchFeeProposalPrefill } from '../../lib/synergy-api';
+import type { DirectoryProject } from '../../lib/vendor/fd-directory-client';
+import { engineerForAccount } from '../../lib/engineer-identity';
+import { fieldProvenance, provenanceAnnouncement } from '../../lib/field-provenance';
 
 // The fee proposal inside Word: the same form as the web tool, and Generate opens the
 // letter as a new Word document instead of downloading a file. The stage tables are
@@ -22,15 +28,50 @@ interface Props {
   inWord: boolean;
   busy: string | null;
   run: (label: string, fn: () => Promise<string | void>) => Promise<void>;
+  signIn?: FdSignIn;
 }
 
-export default function FeeProposalPane({ inWord, busy, run }: Props) {
+export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
   const { state, dispatch, totalFee, buildRequest } = useFeeProposal();
   const [engineers, setEngineers] = useState<Engineer[]>([]);
+  const lookup = useRef<AbortController | null>(null);
 
   useEffect(() => {
     fetchEngineersViaProxy().then(setEngineers).catch(() => setEngineers([]));
+    return () => lookup.current?.abort();
   }, []);
+
+  const provenance = fieldProvenance(state);
+  const pendingReview = Object.keys(state.directory_proposals).length;
+  const announcement = [
+    provenanceAnnouncement(provenance),
+    pendingReview ? `${pendingReview} field${pendingReview > 1 ? 's have' : ' has'} a different value in Total Synergy to review.` : '',
+  ].filter(Boolean).join(' ');
+  const account = signIn?.state === 'signed_in' ? signIn.account : null;
+  const accountEngineer = engineerForAccount(account, engineers);
+  // Waits for the engineer list, so a signed-in person on the list is never treated as unknown.
+  const engineersReady = engineers.length > 0;
+  const accountKey = account?.key ?? null;
+  useEffect(() => {
+    if (accountKey && !engineersReady) return;
+    dispatch({ type: 'APPLY_ACCOUNT_ENGINEER', accountKey, engineer: accountEngineer });
+  }, [accountKey, accountEngineer, engineersReady, dispatch]);
+
+  const linkProject = (project: DirectoryProject) => {
+    lookup.current?.abort();
+    const controller = new AbortController();
+    lookup.current = controller;
+    const ref = project.id;
+    dispatch({ type: 'LINK_DIRECTORY_PROJECT', project });
+    void pollFeeProposalPrefill(ref, {
+      fetchPrefill: fetchFeeProposalPrefill,
+      signal: controller.signal,
+      onResponse: (prefill) => dispatch({ type: 'APPLY_DIRECTORY_PREFILL', prefill }),
+    }).then((outcome) => {
+      const notice = outcomeNotice(outcome);
+      if (notice && !controller.signal.aborted) dispatch({ type: 'SET_DIRECTORY_NOTICE', ref, notice });
+    });
+  };
 
   /** The generator's own preconditions, checked here so the message is plain. */
   const missing = (): string | null => {
@@ -58,34 +99,40 @@ export default function FeeProposalPane({ inWord, busy, run }: Props) {
   return (
     <div className="space-y-3">
       <SynergyProjectPicker
-        selectedId={state.project.synergy_project_id}
-        selectedOrgId={state.project.organisation_id}
+        selectedRef={state.synergy_project_ref}
         selectedLabel={state.project.synergy_project_label}
-        onSelect={(hit) => {
-          dispatch({
-            type: 'LINK_SYNERGY_PROJECT',
-            synergy_project_id: hit.synergy_project_id,
-            organisation_id: hit.organisation_id,
-            label: hit.label,
-            inferred_name: hit.name ?? undefined,
-            inferred_location: hit.location ?? undefined,
-            inferred_client: hit.client_name ?? undefined,
-            inferred_manager: hit.manager ?? undefined,
-          });
-        }}
+        signIn={signIn}
+        onSelect={linkProject}
         onUnlink={() => {
+          lookup.current?.abort();
           dispatch({ type: 'UNLINK_SYNERGY_PROJECT' });
         }}
       />
+      <p data-testid="autofill-announcement" className="sr-only" aria-live="polite">{announcement}</p>
 
       <CollapsibleSection title="Client Details" dense defaultOpen={true}>
-        <ClientDetailsSection client={state.client} dispatch={dispatch} />
+        {state.client_role_notice && (
+          <p className="mb-3 text-xs text-gray-600" role="status">{state.client_role_notice}</p>
+        )}
+        <ClientDetailsSection
+          client={state.client}
+          dispatch={dispatch}
+          showCompany
+          contactSuggestions={state.contact_suggestions}
+          provenance={provenance}
+          proposals={state.directory_proposals}
+        />
       </CollapsibleSection>
       <CollapsibleSection title="Project Details" dense defaultOpen={true}>
-        <ProjectDetailsSection project={state.project} dispatch={dispatch} />
+        <ProjectDetailsSection project={state.project} dispatch={dispatch} provenance={provenance} proposals={state.directory_proposals} />
       </CollapsibleSection>
       <CollapsibleSection title="Fee Options" dense defaultOpen={true}>
-        <FeeOptionsSection feeOptions={state.fee_options} engineers={engineers} dispatch={dispatch} />
+        <FeeOptionsSection feeOptions={state.fee_options} engineers={engineers} dispatch={dispatch} provenance={provenance} />
+        {account && engineersReady && !accountEngineer && !state.fee_options.engineer_name && (
+          <p className="mt-2 text-xs text-gray-600">
+            {account.name || account.username} is not on the engineer list, so no engineer was chosen. Pick one above.
+          </p>
+        )}
       </CollapsibleSection>
       <CollapsibleSection title="Design Stages: RIBA 1-4" dense defaultOpen={true}>
         <StageCards
@@ -133,3 +180,4 @@ export default function FeeProposalPane({ inWord, busy, run }: Props) {
     </div>
   );
 }
+
