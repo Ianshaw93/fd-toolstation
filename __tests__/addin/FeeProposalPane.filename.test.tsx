@@ -175,11 +175,12 @@ describe('Word fee pane suggested filename', () => {
     expect(applyTitle).not.toHaveBeenCalledWith(expect.stringMatching(/Typed/));
   }, 15000);
 
-  it('tells an unsaved Word document that Save As will suggest the name', async () => {
+  it('tells an unsaved Word document to copy the name because Save As will not suggest it', async () => {
     officeGlobal.Office = { context: { document: { url: '' } } };
     render(<FeeProposalPane inWord={true} busy={null} run={jest.fn()} signIn={signedIn} />);
     await link('0602 Brick House Farm', '0602');
-    expect(await screen.findByTestId('suggested-filename-note')).toHaveTextContent(/suggest this name when you save/i);
+    expect(await screen.findByTestId('suggested-filename-note')).toHaveTextContent(/won't suggest this name/i);
+    expect(screen.getByTestId('suggested-filename-note')).toHaveTextContent(/paste it into the file name box/i);
     expect(screen.getByTestId('suggested-filename-note')).not.toHaveTextContent(/already saved/i);
   }, 15000);
 });
