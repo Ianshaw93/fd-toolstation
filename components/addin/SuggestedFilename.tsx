@@ -7,7 +7,7 @@ export function suggestedFilenameNote(documentSaved: boolean | null): string {
     return 'This document is already saved, so Word cannot rename it. Copy the name and rename the file.';
   }
   if (documentSaved === false) {
-    return 'Word will suggest this name when you save.';
+    return "Word won't suggest this name when you save. Copy it, then paste it into the file name box in Save As.";
   }
   return 'Copy this name and use it as the filename when you save.';
 }
