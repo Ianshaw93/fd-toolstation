@@ -3,13 +3,16 @@ import userEvent from '@testing-library/user-event';
 import FeeProposalPane from '../../components/addin/FeeProposalPane';
 import { setDirectoryAccessTokenProvider } from '../../lib/directory-auth';
 import { buildFeeProposalFilename } from '../../lib/fee-proposal-filename';
-import { applySuggestedDocumentTitle, wordDocumentUrl } from '../../lib/word-ops';
+import { applySuggestedDocumentTitle, createNamedFeeProposalDocument, wordDocumentUrl } from '../../lib/word-ops';
+import { renderFeeProposal } from '../../lib/word-addin-api';
 import { fixtureAccessToken, searchPage, served0406WithContacts } from '../../test-fixtures/directory-contract-v1';
 import type { DirectoryProject } from '../../lib/vendor/fd-directory-client';
 
 jest.mock('../../lib/word-addin-api', () => ({
-  fetchEngineersViaProxy: jest.fn().mockResolvedValue([]),
-  renderFeeProposal: jest.fn(),
+  fetchEngineersViaProxy: jest.fn().mockResolvedValue([
+    { full_name: 'Joana Kruk', email_prefix: 'jkruk', phone_number: '', job_title: 'Engineer' },
+  ]),
+  renderFeeProposal: jest.fn().mockResolvedValue('MOCK_BASE64_BYTES'),
 }));
 
 jest.mock('../../lib/word-ops', () => {
@@ -17,10 +20,18 @@ jest.mock('../../lib/word-ops', () => {
   return {
     ...actual,
     applySuggestedDocumentTitle: jest.fn(async () => 'unsupported'),
+    createNamedFeeProposalDocument: jest.fn(async (name: string, b64?: string) => ({
+      path: 'A',
+      saved: true,
+      filename: name,
+      savedLocation: `C:\\Users\\IanShaw\\Documents\\${name}.docx`,
+    })),
   };
 });
 
 const applyTitle = applySuggestedDocumentTitle as jest.MockedFunction<typeof applySuggestedDocumentTitle>;
+const mockCreateNamedDoc = createNamedFeeProposalDocument as jest.MockedFunction<typeof createNamedFeeProposalDocument>;
+const mockRenderFee = renderFeeProposal as jest.MockedFunction<typeof renderFeeProposal>;
 
 function json(body: unknown, status = 200) {
   return {
@@ -130,15 +141,15 @@ describe('Word fee pane suggested filename', () => {
 
     const expected = buildFeeProposalFilename({ numberFormatted: '0602', projectName: 'Brick: House/Farm' });
     expect(expected).toMatch(/^0602 Brick House Farm Fire Dynamics Group Fee Proposal \d{2}-\d{2}-\d{2}$/);
-    expect(await screen.findByTestId('suggested-filename')).toHaveTextContent(expected);
+    expect(await screen.findByTestId('suggested-filename')).toHaveValue(expected);
     expect(screen.getByTestId('suggested-filename-note')).toHaveTextContent(/use it as the filename when you save/i);
     expect(applyTitle).not.toHaveBeenCalled();
 
     const projectName = screen.getByDisplayValue('Brick: House/Farm');
     await userEvent.clear(projectName);
     await userEvent.type(projectName, 'Typed name');
-    expect(screen.getByTestId('suggested-filename')).toHaveTextContent(expected);
-    expect(screen.getByTestId('suggested-filename')).not.toHaveTextContent('Typed name');
+    expect(screen.getByTestId('suggested-filename')).toHaveValue(expected);
+    expect(screen.getByTestId('suggested-filename')).not.toHaveValue('Typed name');
 
     await userEvent.click(screen.getByRole('button', { name: 'Copy suggested filename' }));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expected);
@@ -155,7 +166,7 @@ describe('Word fee pane suggested filename', () => {
 
     await link('0701 Riverside School', '0701');
     const expected = buildFeeProposalFilename({ numberFormatted: '0701', projectName: 'Riverside School' });
-    expect(await screen.findByTestId('suggested-filename')).toHaveTextContent(expected);
+    expect(await screen.findByTestId('suggested-filename')).toHaveValue(expected);
   }, 15000);
 
   it('sets the document Title when a project is linked inside Word, and says when the file is already saved', async () => {
@@ -181,5 +192,59 @@ describe('Word fee pane suggested filename', () => {
     await link('0602 Brick House Farm', '0602');
     expect(await screen.findByTestId('suggested-filename-note')).toHaveTextContent(/suggest this name when you save/i);
     expect(screen.getByTestId('suggested-filename-note')).not.toHaveTextContent(/already saved/i);
+  }, 15000);
+
+  it('allows user to edit the filename and reset it back to suggested', async () => {
+    render(<FeeProposalPane inWord={false} busy={null} run={jest.fn()} signIn={signedIn} />);
+    await link('0602 Brick House Farm', '0602');
+    const input = await screen.findByTestId('suggested-filename');
+    const defaultName = buildFeeProposalFilename({ numberFormatted: '0602', projectName: 'Brick: House/Farm' });
+    expect(input).toHaveValue(defaultName);
+
+    // Edit filename
+    await userEvent.clear(input);
+    await userEvent.type(input, 'My Custom Proposal Name');
+    expect(input).toHaveValue('My Custom Proposal Name');
+
+    // Reset button appears
+    const reset = screen.getByRole('button', { name: 'Reset' });
+    await userEvent.click(reset);
+    expect(input).toHaveValue(defaultName);
+  }, 15000);
+
+  it('creates and saves the named proposal document on Generate using active filename and rendered base64', async () => {
+    officeGlobal.Office = {
+      context: {
+        requirements: {
+          isSetSupported: (set: string) => set === 'WordApi',
+        },
+        document: { url: '' },
+      },
+    };
+    const mockRun = jest.fn(async (_label: string, fn: () => Promise<string | void>) => {
+      await fn();
+    });
+
+    render(<FeeProposalPane inWord={true} busy={null} run={mockRun} signIn={signedIn} />);
+    await link('0602 Brick House Farm', '0602');
+
+    const input = await screen.findByTestId('suggested-filename');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Custom Proposal 0602');
+
+    // Fill in required fields to allow Generate
+    const clientFirst = screen.getByLabelText(/First Name/i);
+    await userEvent.type(clientFirst, 'Robin');
+
+    const engineerSelect = screen.getByDisplayValue('Select Engineer');
+    await userEvent.selectOptions(engineerSelect, 'Joana Kruk');
+
+    const generateBtn = screen.getByRole('button', { name: 'Generate' });
+    await userEvent.click(generateBtn);
+
+    expect(mockRenderFee).toHaveBeenCalled();
+    expect(mockCreateNamedDoc).toHaveBeenCalledWith('Custom Proposal 0602', 'MOCK_BASE64_BYTES');
+    // Result banner is displayed in the card
+    expect(await screen.findByTestId('saved-result-message')).toHaveTextContent(/Saved as Custom Proposal 0602/i);
   }, 15000);
 });

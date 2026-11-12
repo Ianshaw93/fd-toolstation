@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createNamedFeeProposalDocument, type NamedProposalResult } from '../../lib/word-ops';
+import type { NamedProposalResult } from '../../lib/word-ops';
 
 export function suggestedFilenameNote(documentSaved: boolean | null): string {
   if (documentSaved === true) {
@@ -36,27 +36,23 @@ async function copyText(text: string): Promise<void> {
 
 interface Props {
   filename: string;
+  suggestedFilename?: string | null;
+  onChange?: (newFilename: string) => void;
+  onReset?: () => void;
   /** True when the open Word file already has a path or URL. Null outside Word. */
   documentSaved: boolean | null;
-  /** Document creation handler. Defaults to createNamedFeeProposalDocument from word-ops. */
-  onCreateNamedDocument?: (filename: string) => Promise<NamedProposalResult>;
+  savedResult?: NamedProposalResult | null;
 }
 
 export default function SuggestedFilename({
   filename,
+  suggestedFilename,
+  onChange,
+  onReset,
   documentSaved,
-  onCreateNamedDocument = createNamedFeeProposalDocument,
+  savedResult,
 }: Props) {
   const [copied, setCopied] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<NamedProposalResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setCopied(false);
-    setResult(null);
-    setError(null);
-  }, [filename]);
 
   useEffect(() => {
     if (!copied) return;
@@ -64,83 +60,77 @@ export default function SuggestedFilename({
     return () => window.clearTimeout(timer);
   }, [copied]);
 
-  const handleCreate = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await onCreateNamedDocument(filename);
-      setResult(res);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Could not create named fee proposal document.';
-      setError(message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const note = suggestedFilenameNote(documentSaved);
   const copyLabel = copied ? 'Copied suggested filename' : 'Copy suggested filename';
+  const isCustomized = Boolean(suggestedFilename && filename !== suggestedFilename);
 
   return (
     <div className="border-t border-sky-200 pt-2 space-y-2" data-testid="suggested-filename-card">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-sky-800">Suggested filename</span>
-        <button
-          type="button"
-          onClick={() => {
-            void copyText(filename).then(
-              () => setCopied(true),
-              () => setCopied(false),
-            );
-          }}
-          className="shrink-0 text-xs font-medium text-sky-800 underline"
-          aria-label={copyLabel}
-          aria-describedby="suggested-filename-note"
-        >
-          {copied ? 'Copied' : 'Copy'}
-        </button>
+        <label htmlFor="proposal-filename-input" className="text-xs font-semibold text-sky-800">
+          Suggested filename
+        </label>
+        <div className="flex items-center gap-2">
+          {isCustomized && onReset && (
+            <button
+              type="button"
+              onClick={onReset}
+              className="text-xs font-medium text-sky-700 hover:text-sky-900 underline"
+            >
+              Reset
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              void copyText(filename).then(
+                () => setCopied(true),
+                () => setCopied(false),
+              );
+            }}
+            className="shrink-0 text-xs font-medium text-sky-800 underline"
+            aria-label={copyLabel}
+            aria-describedby="suggested-filename-note"
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
       </div>
-      <p data-testid="suggested-filename" className="text-xs text-gray-900 break-words">
-        {filename}
-      </p>
+
+      <input
+        id="proposal-filename-input"
+        data-testid="suggested-filename"
+        type="text"
+        value={filename}
+        onChange={(e) => onChange?.(e.target.value)}
+        className="w-full rounded border border-sky-300 bg-white px-2 py-1.5 text-xs text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+        aria-describedby="suggested-filename-note"
+      />
+
       <p id="suggested-filename-note" data-testid="suggested-filename-note" className="text-xs text-gray-600">
         {note}
       </p>
 
-      <button
-        type="button"
-        disabled={busy}
-        onClick={handleCreate}
-        className="w-full rounded-md bg-sky-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-600 disabled:opacity-50 transition-colors"
-      >
-        {busy ? 'Creating proposal…' : 'Create named proposal'}
-      </button>
-
-      {result?.saved && (
+      {savedResult?.saved && (
         <div className="rounded-md border border-emerald-200 bg-emerald-50/80 p-2 text-xs text-emerald-900 space-y-1" role="status">
-          <p className="font-semibold flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-            Saved as {result.filename}. Move it to the project folder (e.g. Dropbox).
-          </p>
-          {result.savedLocation && (
-            <p className="text-2xs text-emerald-800 break-all font-mono">
-              Location: {result.savedLocation}
-            </p>
+          <div className="flex items-start gap-1.5 font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mt-1 shrink-0" />
+            <span data-testid="saved-result-message">
+              Saved as <span className="font-semibold">{savedResult.filename}</span>. Move it to the project folder (e.g. Dropbox).
+            </span>
+          </div>
+          {savedResult.savedLocation && (
+            <div className="text-2xs text-emerald-700 truncate font-mono pl-3" title={savedResult.savedLocation}>
+              Location: {savedResult.savedLocation}
+            </div>
           )}
         </div>
       )}
 
-      {result && !result.saved && (
-        <div className="rounded-md border border-amber-200 bg-amber-50/80 p-2 text-xs text-amber-900 space-y-1" role="status">
-          <p className="font-medium">
-            Opened in a new document. Save As and use the copied filename.
-          </p>
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800" role="alert">
-          {error}
+      {savedResult && !savedResult.saved && (
+        <div className="rounded-md border border-sky-200 bg-sky-50/80 p-2 text-xs text-sky-900 flex items-start gap-1.5 font-medium" role="status">
+          <span className="w-1.5 h-1.5 rounded-full bg-sky-600 mt-1 shrink-0" />
+          <span>Opened in a new document. Save As and use the copied filename.</span>
         </div>
       )}
     </div>

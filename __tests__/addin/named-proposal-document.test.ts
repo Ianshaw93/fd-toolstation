@@ -245,6 +245,45 @@ describe('createNamedFeeProposalDocument', () => {
       });
     });
 
+    it('uses provided docBase64 directly on Path A without reading active document', async () => {
+      const calls = { createdWithBase64: '', saveBehavior: '', saveName: '', opened: false };
+      setupOffice({ hiddenDoc15: true, desktop14: true });
+
+      const mockCreatedDoc = {
+        fullName: 'C:\\Users\\IanShaw\\Documents\\0602.docx',
+        load: jest.fn(),
+        save: jest.fn((behavior: string, name: string) => {
+          calls.saveBehavior = behavior;
+          calls.saveName = name;
+        }),
+        open: jest.fn(() => {
+          calls.opened = true;
+        }),
+      };
+
+      g.Word = {
+        SaveBehavior: { save: 'Save' },
+        run: async (fn: (ctx: any) => Promise<void>) => {
+          const ctx = {
+            application: {
+              createDocument: (b64: string) => {
+                calls.createdWithBase64 = b64;
+                return mockCreatedDoc;
+              },
+            },
+            sync: async () => {},
+          };
+          await fn(ctx);
+        },
+      };
+
+      const result = await createNamedFeeProposalDocument(TEST_FILENAME, 'EXPLICIT_GENERATED_BASE64');
+
+      expect(calls.createdWithBase64).toBe('EXPLICIT_GENERATED_BASE64');
+      expect(calls.saveName).toBe(TEST_FILENAME);
+      expect(result.saved).toBe(true);
+    });
+
     it('handles Path A when WordApiDesktop 1.4 is not supported', async () => {
       setupOffice({ hiddenDoc15: true, desktop14: false });
 

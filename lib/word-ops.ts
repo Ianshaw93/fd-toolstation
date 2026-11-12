@@ -16,6 +16,7 @@ import {
   titleUpdateChanges,
   type TrackedTitle,
 } from './fee-proposal-document-title';
+import { sanitizeFilenamePart } from './fee-proposal-filename';
 import type { Proposal } from './word-addin-api';
 
 export const SECTION_TAG_PREFIX = 'fdg:section:';
@@ -135,11 +136,12 @@ export function getDocumentBase64(): Promise<string> {
   });
 }
 
-export async function createNamedFeeProposalDocument(name: string): Promise<NamedProposalResult> {
+export async function createNamedFeeProposalDocument(name: string, docBase64?: string): Promise<NamedProposalResult> {
   if (typeof Office === 'undefined' || typeof Word === 'undefined') {
     throw new Error('Office or Word is not available.');
   }
 
+  const cleanName = sanitizeFilenamePart(name.replace(/\.docx$/i, '')) || 'Fee Proposal';
   const canHiddenSave = isSetSupported('WordApiHiddenDocument', '1.5');
   const canDocumentSave = isSetSupported('WordApi', '1.5');
   const docUrl = wordDocumentUrl();
@@ -147,34 +149,44 @@ export async function createNamedFeeProposalDocument(name: string): Promise<Name
 
   if (canHiddenSave) {
     // Path A: WordApiHiddenDocument 1.5 (Desktop). Creates document from base64, saves with name, and opens it.
-    const base64 = await getDocumentBase64();
+    const base64 = docBase64 ?? (await getDocumentBase64());
     let savedLocation: string | null = null;
-    await Word.run(async (ctx: any) => {
-      const saveBehavior = Word.SaveBehavior?.save ?? 'Save';
-      const d = ctx.application.createDocument(base64);
-      d.save(saveBehavior, name);
-      d.open();
-      await ctx.sync();
+    try {
+      await Word.run(async (ctx: any) => {
+        const saveBehavior = Word.SaveBehavior?.save ?? 'Save';
+        const d = ctx.application.createDocument(base64);
+        d.save(saveBehavior, cleanName);
+        d.open();
+        await ctx.sync();
 
-      if (isSetSupported('WordApiDesktop', '1.4')) {
-        try {
-          d.load('fullName');
-          await ctx.sync();
-          if (d.fullName) savedLocation = String(d.fullName);
-        } catch {
-          // DocumentCreated might not expose fullName
+        if (isSetSupported('WordApiDesktop', '1.4')) {
+          try {
+            d.load('fullName');
+            await ctx.sync();
+            if (d.fullName) savedLocation = String(d.fullName);
+          } catch {
+            // DocumentCreated might not expose fullName
+          }
         }
-      }
-    });
-    return { path: 'A', saved: true, filename: name, savedLocation };
+      });
+      return { path: 'A', saved: true, filename: cleanName, savedLocation };
+    } catch {
+      // If saving fails (e.g. existing file is locked by Word), fall back to opening without saving
+      await Word.run(async (ctx: any) => {
+        const d = ctx.application.createDocument(base64);
+        d.open();
+        await ctx.sync();
+      });
+      return { path: 'C', saved: false, filename: cleanName, savedLocation: null };
+    }
   }
 
-  if (isUnsaved && canDocumentSave) {
+  if (!docBase64 && isUnsaved && canDocumentSave) {
     // Path B: Document has never been saved and WordApi 1.5 is supported. Save in place without creating a new document.
     let savedLocation: string | null = null;
     await Word.run(async (ctx: any) => {
       const saveBehavior = Word.SaveBehavior?.save ?? 'Save';
-      ctx.document.save(saveBehavior, name);
+      ctx.document.save(saveBehavior, cleanName);
       await ctx.sync();
 
       if (isSetSupported('WordApiDesktop', '1.4')) {
@@ -187,17 +199,17 @@ export async function createNamedFeeProposalDocument(name: string): Promise<Name
         }
       }
     });
-    return { path: 'B', saved: true, filename: name, savedLocation };
+    return { path: 'B', saved: true, filename: cleanName, savedLocation };
   }
 
   // Path C: Fallback. Create and open new document without saving.
-  const base64 = await getDocumentBase64();
+  const base64 = docBase64 ?? (await getDocumentBase64());
   await Word.run(async (ctx: any) => {
     const d = ctx.application.createDocument(base64);
     d.open();
     await ctx.sync();
   });
-  return { path: 'C', saved: false, filename: name, savedLocation: null };
+  return { path: 'C', saved: false, filename: cleanName, savedLocation: null };
 }
 
 export async function newDocumentFromBase64(base64: string): Promise<void> {
