@@ -1,8 +1,9 @@
-// Server-side forwarding to the shared project directory API. Only the caller's own bearer
-// token is forwarded (no cookies, no Synergy key); the directory decides whether it is a
-// delegated access_as_user token for the FD tenant and answers 401 / 403 / 503 itself.
+// Server-side forwarding to the shared project directory API. Requires a valid add-in
+// session (from cookie or session token). Calls the directory with a server-only service
+// credential (TOOLSTATION_SERVICE_KEY) and forwards the signed-in user's email as audit context.
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { ADDIN_SESSION_COOKIE, verifySessionToken, type AddinSession } from './auth-session';
 
 const DEFAULT_DIRECTORY_API_BASE = 'https://directory-api-production-7f250373.up.railway.app';
 
@@ -12,9 +13,28 @@ export function directoryApiBase(): string {
   return (process.env.DIRECTORY_API_BASE || DEFAULT_DIRECTORY_API_BASE).replace(/\/$/, '');
 }
 
-export function callerAuthorization(header: string | null): string | null {
-  const value = header?.trim() ?? '';
-  return /^Bearer [A-Za-z0-9\-_.~+/]+=*$/i.test(value) ? `Bearer ${value.slice(7)}` : null;
+export function toolstationServiceKey(): string {
+  return process.env.TOOLSTATION_SERVICE_KEY || 'toolstation-service-dev-key';
+}
+
+export function callerSession(req: NextRequest): AddinSession | null {
+  // 1. Check session cookie
+  const cookie = req.cookies.get(ADDIN_SESSION_COOKIE)?.value;
+  const fromCookie = verifySessionToken(cookie);
+  if (fromCookie) return fromCookie;
+
+  // 2. Check Authorization Bearer header (session token)
+  const auth = req.headers.get('authorization');
+  if (auth && /^Bearer /i.test(auth)) {
+    const fromBearer = verifySessionToken(auth.slice(7).trim());
+    if (fromBearer) return fromBearer;
+  }
+
+  return null;
+}
+
+export function sessionRequired(): NextResponse {
+  return NextResponse.json({ error: 'unauthorized', code: 'missing_session' }, { status: 401 });
 }
 
 export function directorySearchUrl(params: URLSearchParams): string {
@@ -31,15 +51,17 @@ export function directoryPrefillUrl(id: string): string {
   return `${directoryApiBase()}/v1/projects/${encodeURIComponent(id)}/fee-proposal-prefill`;
 }
 
-export function signInRequired(): NextResponse {
-  return NextResponse.json({ error: 'unauthorized', code: 'missing_token' }, { status: 401 });
-}
-
-export async function forwardToDirectory(url: string, authorization: string): Promise<NextResponse> {
+export async function forwardToDirectory(url: string, userEmail: string): Promise<NextResponse> {
+  const serviceKey = toolstationServiceKey();
   let upstream: Response;
   try {
     upstream = await fetch(url, {
-      headers: { Accept: 'application/json', Authorization: authorization },
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${serviceKey}`,
+        'x-toolstation-key': serviceKey,
+        'x-forwarded-user': userEmail,
+      },
       cache: 'no-store',
       redirect: 'error',
     });

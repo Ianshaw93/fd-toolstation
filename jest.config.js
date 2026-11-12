@@ -4,11 +4,14 @@ module.exports = {
   setupFiles: ['<rootDir>/jest.polyfills.ts'],
   setupFilesAfterEnv: ['@testing-library/jest-dom'],
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
+    '^.+\\.[tj]sx?$': ['ts-jest', {
       tsconfig: 'tsconfig.json',
       jsx: 'react-jsx',
     }],
   },
+  transformIgnorePatterns: [
+    '/node_modules/(?!jose/)',
+  ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
   },

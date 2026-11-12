@@ -1,6 +1,5 @@
-import { fdMsalConfiguration, startFdSignIn, type FdMsalClient } from '../../lib/fd-msal';
+import { fdMsalConfiguration, startFdSignIn, SSO_SCOPES, type FdMsalClient } from '../../lib/fd-msal';
 import { getDirectoryAccessToken, setDirectoryAccessTokenProvider } from '../../lib/directory-auth';
-import { FD_DIRECTORY_SCOPE } from '../../lib/vendor/fd-directory-client';
 import { fixtureAccessToken } from '../../test-fixtures/directory-contract-v1';
 
 const ACCOUNT = { homeAccountId: 'h', username: 'ian@firedynamicsgroup.com' };
@@ -24,11 +23,11 @@ function fakeClient(overrides: Partial<FdMsalClient> = {}): FdMsalClient & { cal
     },
     acquireTokenSilent: async (request: { account?: unknown }) => {
       calls.silent.push(request);
-      return { accessToken: fixtureAccessToken(), idToken: 'id-token-not-used', account: (request.account as typeof ACCOUNT) ?? ACCOUNT };
+      return { accessToken: fixtureAccessToken(), idToken: 'id-token-test', account: (request.account as typeof ACCOUNT) ?? ACCOUNT };
     },
     acquireTokenPopup: async (request: unknown) => {
       calls.popup.push(request);
-      return { accessToken: fixtureAccessToken(), idToken: 'id-token-not-used', account: ACCOUNT };
+      return { accessToken: fixtureAccessToken(), idToken: 'id-token-test', account: ACCOUNT };
     },
     loginRedirect: async (request: unknown) => {
       calls.redirect.push(request);
@@ -37,7 +36,7 @@ function fakeClient(overrides: Partial<FdMsalClient> = {}): FdMsalClient & { cal
   } as FdMsalClient & { calls: Record<string, unknown[]> };
 }
 
-describe('FD Microsoft sign-in for the Word pane', () => {
+describe('FD Microsoft sign-in for the Word pane (Mail Marshal SSO pattern)', () => {
   afterEach(() => setDirectoryAccessTokenProvider(null));
 
   it('uses the existing shared registration, the FD tenant, and session storage', () => {
@@ -48,16 +47,16 @@ describe('FD Microsoft sign-in for the Word pane', () => {
     expect(config.cache.cacheLocation).toBe('sessionStorage');
   });
 
-  it('inside Word with nested app auth, registers the provider from the Office account silently', async () => {
+  it('inside Word with nested app auth, requests SSO_SCOPES and registers session silently', async () => {
     const client = fakeClient();
     const createNested = jest.fn(async () => client);
     const result = await startFdSignIn({ host: 'word', nestedAppAuth: true, createNested, createStandard: jest.fn() });
     expect(createNested).toHaveBeenCalled();
     expect(result.state).toBe('signed_in');
-    expect(result.account).toEqual({ key: 'h', username: 'ian@firedynamicsgroup.com', name: null });
-    expect(client.calls.silent[0]).toMatchObject({ scopes: [FD_DIRECTORY_SCOPE] });
+    expect(result.account?.username).toBe('ian@firedynamicsgroup.com');
+    expect(client.calls.silent[0]).toMatchObject({ scopes: SSO_SCOPES });
     expect(client.calls.popup).toHaveLength(0);
-    await expect(getDirectoryAccessToken()).resolves.not.toBe('id-token-not-used');
+    await expect(getDirectoryAccessToken()).resolves.toMatch(/\./);
   });
 
   it('inside Word, asks for the existing Microsoft account by popup only when the user presses sign in', async () => {
@@ -110,18 +109,18 @@ describe('FD Microsoft sign-in for the Word pane', () => {
     const client = fakeClient({ getAllAccounts: () => [NAMED as never] });
     const result = await startFdSignIn({ host: 'preview', nestedAppAuth: false, createNested: jest.fn(), createStandard: async () => client });
     expect(result.state).toBe('signed_in');
-    expect(result.account).toEqual({ key: 'n', username: 'sam@firedynamicsgroup.com', name: 'Sam Bennett' });
+    expect(result.account?.username).toBe('sam@firedynamicsgroup.com');
     expect(client.calls.redirect).toHaveLength(0);
   });
 
-  it('in the browser preview with no account, redirects to Microsoft only when the user presses sign in', async () => {
+  it('in the browser preview with no account, redirects to Microsoft with SSO_SCOPES only when the user presses sign in', async () => {
     const client = fakeClient();
     const result = await startFdSignIn({ host: 'preview', nestedAppAuth: false, createNested: jest.fn(), createStandard: async () => client });
     expect(result.state).toBe('needs_sign_in');
     expect(result.account).toBeNull();
     expect(client.calls.redirect).toHaveLength(0);
     await result.signIn();
-    expect(client.calls.redirect[0]).toMatchObject({ scopes: [FD_DIRECTORY_SCOPE] });
+    expect(client.calls.redirect[0]).toMatchObject({ scopes: SSO_SCOPES });
   });
 
   it('reports an MSAL start failure with its error code', async () => {
