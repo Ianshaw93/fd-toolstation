@@ -103,8 +103,12 @@ export async function fetchEngineersViaProxy(): Promise<Engineer[]> {
  * insertion); falls back to the web tool's generate endpoint on a backend that predates it,
  * which is enough for "New document".
  */
-export async function renderFeeProposal(data: FeeProposalRequest): Promise<string> {
-  const init = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) };
+export async function renderFeeProposal(
+  data: FeeProposalRequest,
+  generationContext?: Record<string, unknown>,
+): Promise<string> {
+  const payload = generationContext ? { ...data, generation_context: generationContext } : data;
+  const init = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
   let res = await fetch(`${BACKEND}/fee-proposal/render`, init);
   if (res.status === 404) res = await fetch('/backend/fee-proposals/generate', init);
   return docxBase64(res, 'Failed to render the fee proposal');

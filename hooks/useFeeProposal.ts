@@ -34,6 +34,21 @@ import {
   type PrefillTarget,
 } from '../lib/vendor/fd-directory-client';
 
+export interface PrefillStatusSnapshot {
+  client_lookup: string;
+  client_status: string | null;
+  company_contacts_lookup: string;
+  site_address_present: boolean;
+  fields: {
+    projectName: string;
+    projectCountry: string;
+    clientFirstName: string;
+    clientSurname: string;
+    clientCompanyName: string;
+    clientAddressLines: string;
+  };
+}
+
 interface FeeProposalState {
   client: ClientDetails;
   project: ProjectDetails;
@@ -68,6 +83,8 @@ interface FeeProposalState {
   carried_from: Partial<Record<ReviewField, string>>;
   /** Label of the project linked most recently, kept through an unlink. */
   last_project_label: string | null;
+  /** Snapshot of Total Synergy prefill statuses for the currently linked project. */
+  prefill_statuses: PrefillStatusSnapshot | null;
 }
 
 export type FeeProposalSnapshot = FeeProposalState;
@@ -116,6 +133,7 @@ function initialState(): FeeProposalState {
     directory_declined: {},
     carried_from: {},
     last_project_label: null,
+    prefill_statuses: null,
     fee_options: { engineer_name: '', pii_limit: 100000, include_hourly_rates: false },
     design_stages_1_4: {
       stage_1: defaultServiceConfig(),
@@ -294,6 +312,7 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         client_contact_pick: null,
         contact_suggestions: NO_CONTACT_SUGGESTIONS,
         client_role_notice: null,
+        prefill_statuses: null,
         project: {
           ...written.project,
           synergy_project_id: project.synergyProjectId,
@@ -341,6 +360,20 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
               : [],
         client_role_notice: notice || null,
         contact_suggestions: readContactSuggestions(prefill),
+        prefill_statuses: {
+          client_lookup: prefill.client.lookup,
+          client_status: prefill.client.status,
+          company_contacts_lookup: prefill.client.companyContacts.lookup,
+          site_address_present: prefill.siteAddress !== null,
+          fields: {
+            projectName: prefill.fields.projectName.status,
+            projectCountry: prefill.fields.projectCountry.status,
+            clientFirstName: prefill.fields.clientFirstName.status,
+            clientSurname: prefill.fields.clientSurname.status,
+            clientCompanyName: prefill.fields.clientCompanyName.status,
+            clientAddressLines: prefill.fields.clientAddressLines.status,
+          },
+        },
       };
     }
 
@@ -417,6 +450,7 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         client_role_notice: null,
         contact_suggestions: NO_CONTACT_SUGGESTIONS,
         directory_proposals: {},
+        prefill_statuses: null,
         project: {
           ...state.project,
           synergy_project_id: undefined,

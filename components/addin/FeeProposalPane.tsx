@@ -139,7 +139,22 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
         throw new Error('This version of Word cannot open a generated document. Update Word (Microsoft 365) and try again.');
       }
       setGenerationResult(null);
-      const b64 = await renderFeeProposal(buildRequest());
+      const b64 = await renderFeeProposal(buildRequest(), {
+        user_email: account?.username ?? null,
+        user_name: account?.name ?? null,
+        synergy_project_ref: state.synergy_project_ref,
+        synergy_project_label: state.project.synergy_project_label ?? state.last_project_label ?? null,
+        suggested_filename: suggestedFilename,
+        active_filename: activeFilename || null,
+        prefill_statuses: state.prefill_statuses,
+        provenance,
+        directory_applied: state.directory_applied,
+        directory_proposals: state.directory_proposals,
+        directory_declined: state.directory_declined,
+        directory_review: state.directory_review,
+        carried_from: state.carried_from,
+        client_role_notice: state.client_role_notice,
+      });
       const filenameToSave = activeFilename || suggestedFilename;
       if (filenameToSave) {
         const outcome = await createNamedFeeProposalDocument(filenameToSave, b64);
