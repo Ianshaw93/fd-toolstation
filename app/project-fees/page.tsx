@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { authedFetch } from '../../lib/auth/token';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backendfornextapp-production.up.railway.app';
 
@@ -132,7 +133,7 @@ export default function ProjectFeesPage() {
       return next;
     });
     try {
-      const res = await fetch(`/api/synergy-prefill?ref=${encodeURIComponent(ref)}`);
+      const res = await authedFetch(`/api/synergy-prefill?ref=${encodeURIComponent(ref)}`);
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
       setSynergyPrefills((prev) => ({ ...prev, [ref]: body }));
@@ -151,7 +152,7 @@ export default function ProjectFeesPage() {
     async function load() {
       try {
         setLoading(true);
-        const res = await fetch(`${API_URL}/word/fee-proposal/generations?limit=500`);
+        const res = await authedFetch(`${API_URL}/word/fee-proposal/generations?limit=500`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: FeeGenerationRow[] = await res.json();
         if (active) {
