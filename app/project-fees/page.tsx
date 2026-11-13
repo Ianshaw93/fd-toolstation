@@ -116,7 +116,6 @@ export default function ProjectFeesPage() {
 
   const [query, setQuery] = useState('');
   const [engineerFilter, setEngineerFilter] = useState('ALL');
-  const [sourceFilter, setSourceFilter] = useState('ALL');
   const [synergyFilter, setSynergyFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<'date' | 'fee' | 'ref'>('date');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -185,7 +184,6 @@ export default function ProjectFeesPage() {
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const list = rows.filter((r) => {
       if (engineerFilter !== 'ALL' && r.engineer_name !== engineerFilter) return false;
-      if (sourceFilter !== 'ALL' && r.source !== sourceFilter) return false;
       const synFound = Boolean(r.synergy_context?.synergy_comparison?.synergy_found);
       if (synergyFilter === 'MATCHED' && !synFound) return false;
       if (synergyFilter === 'UNMATCHED' && synFound) return false;
@@ -223,7 +221,7 @@ export default function ProjectFeesPage() {
       return (b.created_at || '').localeCompare(a.created_at || '');
     });
     return list;
-  }, [rows, query, engineerFilter, sourceFilter, synergyFilter, sortBy]);
+  }, [rows, query, engineerFilter, synergyFilter, sortBy]);
 
   const stats = useMemo(() => {
     const fees = filtered
@@ -247,7 +245,7 @@ export default function ProjectFeesPage() {
             </Link>
             <h1 className="text-2xl font-bold text-gray-900 mt-1">Project &amp; Fee History</h1>
             <p className="text-sm text-gray-500">
-              Search previous fee proposals and Total Synergy project matches without the Word add-in
+              Search previous FD fee proposal data
             </p>
           </div>
           <div className="text-sm text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
@@ -257,7 +255,7 @@ export default function ProjectFeesPage() {
 
         {/* Search & Filters */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div className="md:col-span-2">
               <label className="block text-xs font-medium text-gray-500 mb-1">Search</label>
               <input
@@ -282,19 +280,6 @@ export default function ProjectFeesPage() {
                     {eng}
                   </option>
                 ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Source</label>
-              <select
-                value={sourceFilter}
-                onChange={(e) => setSourceFilter(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm text-gray-900 bg-white"
-              >
-                <option value="ALL">All sources</option>
-                <option value="dropbox_backfill">Dropbox backfill</option>
-                <option value="word_addin">Word add-in</option>
               </select>
             </div>
 
