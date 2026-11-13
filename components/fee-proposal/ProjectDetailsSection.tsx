@@ -5,19 +5,26 @@ import type { ProjectDetails } from '../../lib/fee-types';
 import { COUNTRIES, LEGISLATION_REFERENCES } from '../../lib/fee-constants';
 import type { FieldProvenance } from '../../lib/field-provenance';
 import type { DirectoryProposals } from '../../lib/directory-proposals';
+import type { SynergyOfferMap } from '../../hooks/useFeeProposal';
+import type { PreviousFeeOptionsMap } from '../../lib/word-addin-api';
 import FieldProposalReview from './FieldProposalReview';
+import PreviousOptionPicker from './PreviousOptionPicker';
 import SourceBadge from './SourceBadge';
 
 interface Props {
   project: ProjectDetails;
   dispatch: Dispatch<any>;
   /** Word task pane only: where autofilled values came from. */
-  provenance?: Pick<FieldProvenance, 'projectName' | 'country'>;
+  provenance?: Pick<FieldProvenance, 'projectName' | 'location' | 'country'>;
   /** Word task pane only: project values offered for fields the user owns. */
   proposals?: DirectoryProposals;
+  /** Word task pane only: deduplicated options from past non-test fee generations. */
+  previousOptions?: PreviousFeeOptionsMap | null;
+  /** Word task pane only: raw values offered by Total Synergy on the current project. */
+  synergyOffer?: SynergyOfferMap;
 }
 
-export default function ProjectDetailsSection({ project, dispatch, provenance, proposals }: Props) {
+export default function ProjectDetailsSection({ project, dispatch, provenance, proposals, previousOptions, synergyOffer }: Props) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
@@ -32,14 +39,32 @@ export default function ProjectDetailsSection({ project, dispatch, provenance, p
           className="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
         />
         <FieldProposalReview field="projectName" proposal={proposals?.projectName} dispatch={dispatch} />
+        <PreviousOptionPicker
+          field="projectName"
+          label="Project name"
+          synergyValue={synergyOffer?.projectName}
+          previousOptions={previousOptions?.projectName}
+          currentValue={project.project_name}
+          dispatch={dispatch}
+        />
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Project Location</label>
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <label className="block text-sm font-medium text-gray-700">Project Location</label>
+          <SourceBadge provenance={provenance?.location} testId="source-location" />
+        </div>
         <input
           type="text"
           value={project.project_location}
           onChange={(e) => dispatch({ type: 'SET_PROJECT', field: 'project_location', value: e.target.value })}
           className="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+        />
+        <PreviousOptionPicker
+          field="location"
+          label="Project location"
+          previousOptions={previousOptions?.projectLocation}
+          currentValue={project.project_location}
+          dispatch={dispatch}
         />
       </div>
       <div className="md:col-span-2">
@@ -63,6 +88,14 @@ export default function ProjectDetailsSection({ project, dispatch, provenance, p
           ))}
         </div>
         <FieldProposalReview field="country" proposal={proposals?.country} dispatch={dispatch} />
+        <PreviousOptionPicker
+          field="country"
+          label="Project country"
+          synergyValue={synergyOffer?.country}
+          previousOptions={previousOptions?.country}
+          currentValue={project.country}
+          dispatch={dispatch}
+        />
       </div>
       {project.country === 'OTHER' && (
         <>

@@ -6,12 +6,14 @@ const LABELS: Record<FillSource, string> = {
   synergy: 'From Total Synergy',
   microsoft: 'From Microsoft sign-in',
   contact: 'Selected company contact',
+  previous_fee: 'From previous fee',
 };
 
 const WAS: Record<FillSource, string> = {
   synergy: 'was from Total Synergy',
   microsoft: 'was from Microsoft sign-in',
   contact: 'was a selected company contact',
+  previous_fee: 'was from a previous fee',
 };
 
 /** Compact per-field "where this came from" tag. Text, not colour, carries the meaning. */
@@ -32,12 +34,15 @@ export default function SourceBadge({ provenance, testId }: { provenance: Proven
     );
   }
   const review = provenance.kind === 'synergy' && provenance.review?.length;
+  const tone = review
+    ? 'border-amber-300 bg-amber-50 text-amber-900'
+    : provenance.kind === 'previous_fee'
+      ? 'border-indigo-200 bg-indigo-50 text-indigo-800'
+      : 'border-sky-200 bg-sky-50 text-sky-800';
   return (
     <span
       data-testid={testId}
-      className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] leading-none ${
-        review ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-sky-200 bg-sky-50 text-sky-800'
-      }`}
+      className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] leading-none ${tone}`}
     >
       {LABELS[provenance.kind]}
       {review ? ' · check' : ''}

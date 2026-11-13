@@ -21,11 +21,14 @@ import { NO_CONTACT_SUGGESTIONS, readContactSuggestions, type ContactSuggestions
 import { prefillNotice } from '../lib/directory-prefill';
 import {
   FIELD_KEYS,
+  incomingValue,
   proposalsFor,
   REVIEW_FIELDS,
   type DirectoryProposals,
+  type ProposalValue,
   type ReviewField,
 } from '../lib/directory-proposals';
+import type { PreviousFeeOptionsMap } from '../lib/word-addin-api';
 import {
   applyContactSuggestion,
   applyFeeProposalPrefill,
@@ -48,6 +51,10 @@ export interface PrefillStatusSnapshot {
     clientAddressLines: string;
   };
 }
+
+export type PreviousOptionField = 'company' | 'names' | 'address' | 'projectName' | 'location' | 'country';
+
+export type SynergyOfferMap = Partial<Record<ReviewField, ProposalValue>>;
 
 interface FeeProposalState {
   client: ClientDetails;
@@ -85,6 +92,12 @@ interface FeeProposalState {
   last_project_label: string | null;
   /** Snapshot of Total Synergy prefill statuses for the currently linked project. */
   prefill_statuses: PrefillStatusSnapshot | null;
+  /** Deduplicated options from past non-test fee generations for this Synergy project. */
+  previous_fee_options?: PreviousFeeOptionsMap | null;
+  /** Values picked from a previous fee, JSON-stringified per field for provenance tracking. */
+  previous_fee_picks?: Partial<Record<PreviousOptionField, string>>;
+  /** Raw values Total Synergy offered on the current project, so users can switch back from a previous fee. */
+  synergy_offer?: SynergyOfferMap;
 }
 
 export type FeeProposalSnapshot = FeeProposalState;
@@ -100,6 +113,8 @@ type Action =
   /** The signed-in account changed (null: signed out) and this fee-list engineer matches it, if any. */
   | { type: 'APPLY_ACCOUNT_ENGINEER'; accountKey: string | null; engineer: string | null }
   | { type: 'PICK_CLIENT_CONTACT'; contactId: number }
+  | { type: 'SET_PREVIOUS_FEE_OPTIONS'; ref: string; options: PreviousFeeOptionsMap }
+  | { type: 'PICK_PREVIOUS_OPTION'; field: PreviousOptionField; source: 'synergy' | 'previous_fee'; value: unknown }
   | { type: 'RESOLVE_DIRECTORY_PROPOSAL'; field: ReviewField; choice: 'use' | 'keep' }
   | { type: 'UNLINK_SYNERGY_PROJECT' }
   | { type: 'SET_FEE_OPTIONS'; field: keyof FeeOptions; value: string | number | boolean }
@@ -134,6 +149,9 @@ function initialState(): FeeProposalState {
     carried_from: {},
     last_project_label: null,
     prefill_statuses: null,
+    previous_fee_options: null,
+    previous_fee_picks: {},
+    synergy_offer: {},
     fee_options: { engineer_name: '', pii_limit: 100000, include_hourly_rates: false },
     design_stages_1_4: {
       stage_1: defaultServiceConfig(),
@@ -313,6 +331,9 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         contact_suggestions: NO_CONTACT_SUGGESTIONS,
         client_role_notice: null,
         prefill_statuses: null,
+        previous_fee_options: null,
+        previous_fee_picks: {},
+        synergy_offer: {},
         project: {
           ...written.project,
           synergy_project_id: project.synergyProjectId,
@@ -349,8 +370,14 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         declined: state.directory_declined,
         width: PREFILL_DEFAULTS.clientAddressLines.length,
       });
+      const synergyOffer: SynergyOfferMap = {};
+      for (const rf of REVIEW_FIELDS) {
+        const offeredVal = incomingValue(rf, prefill, PREFILL_DEFAULTS.clientAddressLines.length);
+        if (offeredVal !== null) synergyOffer[rf] = offeredVal;
+      }
       return {
         ...writePrefillTarget(state, merged.values, carryKept(state.directory_applied, merged)),
+        synergy_offer: synergyOffer,
         directory_proposals: proposals,
         directory_review:
           merged.applied.clientAddressLines !== undefined
@@ -442,6 +469,87 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
       if (action.ref !== state.synergy_project_ref) return state;
       return { ...state, client_role_notice: action.notice };
 
+    case 'SET_PREVIOUS_FEE_OPTIONS':
+      if (action.ref !== state.synergy_project_ref) return state;
+      return { ...state, previous_fee_options: action.options };
+
+    case 'PICK_PREVIOUS_OPTION': {
+      const nextPicks = { ...(state.previous_fee_picks ?? {}) };
+      const nextApplied = { ...state.directory_applied };
+      const nextCarried = { ...state.carried_from };
+      const width = PREFILL_DEFAULTS.clientAddressLines.length;
+
+      let nextClient = state.client;
+      let nextProject = state.project;
+      let nextContactPick = state.client_contact_pick;
+
+      if (action.field === 'company' && typeof action.value === 'string') {
+        nextClient = { ...nextClient, company_name: action.value };
+        delete nextCarried.company;
+        if (action.source === 'previous_fee') nextPicks.company = JSON.stringify(action.value);
+        else {
+          delete nextPicks.company;
+          nextApplied.clientCompanyName = action.value;
+        }
+      } else if (action.field === 'names' && typeof action.value === 'object' && action.value !== null) {
+        const v = action.value as { firstName?: string; lastName?: string };
+        const first = v.firstName ?? '';
+        const last = v.lastName ?? '';
+        nextClient = { ...nextClient, first_name: first, surname: last };
+        nextContactPick = null;
+        delete nextCarried.names;
+        if (action.source === 'previous_fee') {
+          nextPicks.names = JSON.stringify({ firstName: first, lastName: last });
+        } else {
+          delete nextPicks.names;
+          nextApplied.clientFirstName = first;
+          nextApplied.clientSurname = last;
+        }
+      } else if (action.field === 'address' && Array.isArray(action.value)) {
+        const rawLines = action.value.map((l) => String(l ?? ''));
+        const padded = [...rawLines.slice(0, width), ...Array<string>(Math.max(0, width - rawLines.length)).fill('')];
+        nextClient = { ...nextClient, address_lines: padded };
+        delete nextCarried.address;
+        if (action.source === 'previous_fee') nextPicks.address = JSON.stringify(padded);
+        else {
+          delete nextPicks.address;
+          nextApplied.clientAddressLines = padded;
+        }
+      } else if (action.field === 'projectName' && typeof action.value === 'string') {
+        nextProject = { ...nextProject, project_name: action.value };
+        delete nextCarried.projectName;
+        if (action.source === 'previous_fee') nextPicks.projectName = JSON.stringify(action.value);
+        else {
+          delete nextPicks.projectName;
+          nextApplied.projectName = action.value;
+        }
+      } else if (action.field === 'location' && typeof action.value === 'string') {
+        nextProject = { ...nextProject, project_location: action.value };
+        if (action.source === 'previous_fee') nextPicks.location = JSON.stringify(action.value);
+        else delete nextPicks.location;
+      } else if (action.field === 'country' && (action.value === 'EW' || action.value === 'J' || action.value === 'OTHER')) {
+        nextProject = { ...nextProject, country: action.value };
+        delete nextCarried.country;
+        if (action.source === 'previous_fee') nextPicks.country = JSON.stringify(action.value);
+        else {
+          delete nextPicks.country;
+          nextApplied.projectCountry = action.value;
+        }
+      } else {
+        return state;
+      }
+
+      return {
+        ...state,
+        client: nextClient,
+        project: nextProject,
+        client_contact_pick: nextContactPick,
+        directory_applied: nextApplied,
+        carried_from: nextCarried,
+        previous_fee_picks: nextPicks,
+      };
+    }
+
     case 'UNLINK_SYNERGY_PROJECT':
       // Values and directory_applied stay, so choosing another project replaces only what was filled.
       return {
@@ -451,6 +559,9 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         contact_suggestions: NO_CONTACT_SUGGESTIONS,
         directory_proposals: {},
         prefill_statuses: null,
+        previous_fee_options: null,
+        previous_fee_picks: {},
+        synergy_offer: {},
         project: {
           ...state.project,
           synergy_project_id: undefined,

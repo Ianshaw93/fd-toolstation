@@ -4,7 +4,10 @@ import { Dispatch, useId } from 'react';
 import type { ContactSuggestions } from '../../lib/client-contact-suggestions';
 import { addressReviewText, type FieldProvenance } from '../../lib/field-provenance';
 import type { DirectoryProposals } from '../../lib/directory-proposals';
+import type { SynergyOfferMap } from '../../hooks/useFeeProposal';
+import type { PreviousFeeOptionsMap } from '../../lib/word-addin-api';
 import FieldProposalReview from './FieldProposalReview';
+import PreviousOptionPicker from './PreviousOptionPicker';
 import SourceBadge from './SourceBadge';
 import type { ClientDetails } from '../../lib/fee-types';
 
@@ -19,9 +22,13 @@ interface Props {
   provenance?: Pick<FieldProvenance, 'company' | 'names' | 'address'>;
   /** Word task pane only: project values offered for fields the user owns. */
   proposals?: DirectoryProposals;
+  /** Word task pane only: deduplicated options from past non-test fee generations. */
+  previousOptions?: PreviousFeeOptionsMap | null;
+  /** Word task pane only: raw values offered by Total Synergy on the current project. */
+  synergyOffer?: SynergyOfferMap;
 }
 
-export default function ClientDetailsSection({ client, dispatch, showCompany = false, contactSuggestions, provenance, proposals }: Props) {
+export default function ClientDetailsSection({ client, dispatch, showCompany = false, contactSuggestions, provenance, proposals, previousOptions, synergyOffer }: Props) {
   const addressReview = provenance?.address?.kind === 'synergy' ? provenance.address.review : undefined;
   const id = useId();
   const people = contactSuggestions?.people ?? [];
@@ -50,6 +57,14 @@ export default function ClientDetailsSection({ client, dispatch, showCompany = f
             className="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
           />
           <FieldProposalReview field="company" proposal={proposals?.company} dispatch={dispatch} />
+          <PreviousOptionPicker
+            field="company"
+            label="Company"
+            synergyValue={synergyOffer?.company}
+            previousOptions={previousOptions?.company}
+            currentValue={client.company_name ?? ''}
+            dispatch={dispatch}
+          />
           <p className="mt-1 text-xs text-gray-500">
             The letter says Dear {'{first name}'}. The company is not that name.
           </p>
@@ -109,6 +124,14 @@ export default function ClientDetailsSection({ client, dispatch, showCompany = f
       </div>
       <div className="md:col-span-2 -mt-2">
         <FieldProposalReview field="names" proposal={proposals?.names} dispatch={dispatch} />
+        <PreviousOptionPicker
+          field="names"
+          label="Client name"
+          synergyValue={synergyOffer?.names}
+          previousOptions={previousOptions?.names}
+          currentValue={{ firstName: client.first_name, lastName: client.surname }}
+          dispatch={dispatch}
+        />
       </div>
       <div className="md:col-span-2">
         <div className="flex items-center justify-between gap-2 mb-1">
@@ -137,6 +160,14 @@ export default function ClientDetailsSection({ client, dispatch, showCompany = f
           ))}
         </div>
         <FieldProposalReview field="address" proposal={proposals?.address} dispatch={dispatch} />
+        <PreviousOptionPicker
+          field="address"
+          label="Address"
+          synergyValue={synergyOffer?.address}
+          previousOptions={previousOptions?.address}
+          currentValue={client.address_lines}
+          dispatch={dispatch}
+        />
       </div>
     </div>
   );

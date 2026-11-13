@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { useFeeProposal } from '../../hooks/useFeeProposal';
 import type { Engineer } from '../../lib/fee-types';
-import { fetchEngineersViaProxy, renderFeeProposal } from '../../lib/word-addin-api';
+import { fetchEngineersViaProxy, fetchPreviousFeeOptions, renderFeeProposal } from '../../lib/word-addin-api';
 import { buildFeeProposalFilename } from '../../lib/fee-proposal-filename';
 import {
   applySuggestedDocumentTitle,
@@ -118,6 +118,13 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
       const notice = outcomeNotice(outcome);
       if (notice && !controller.signal.aborted) dispatch({ type: 'SET_DIRECTORY_NOTICE', ref, notice });
     });
+    if (typeof fetchPreviousFeeOptions === 'function') {
+      void fetchPreviousFeeOptions(ref, controller.signal).then((res) => {
+        if (!controller.signal.aborted && res.generation_count > 0) {
+          dispatch({ type: 'SET_PREVIOUS_FEE_OPTIONS', ref, options: res.options });
+        }
+      });
+    }
   };
 
   /** The generator's own preconditions, checked here so the message is plain. */
@@ -215,10 +222,19 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
           contactSuggestions={state.contact_suggestions}
           provenance={provenance}
           proposals={state.directory_proposals}
+          previousOptions={state.previous_fee_options}
+          synergyOffer={state.synergy_offer}
         />
       </CollapsibleSection>
       <CollapsibleSection title="Project Details" dense defaultOpen={true}>
-        <ProjectDetailsSection project={state.project} dispatch={dispatch} provenance={provenance} proposals={state.directory_proposals} />
+        <ProjectDetailsSection
+          project={state.project}
+          dispatch={dispatch}
+          provenance={provenance}
+          proposals={state.directory_proposals}
+          previousOptions={state.previous_fee_options}
+          synergyOffer={state.synergy_offer}
+        />
       </CollapsibleSection>
       <CollapsibleSection title="Fee Options" dense defaultOpen={true}>
         <FeeOptionsSection feeOptions={state.fee_options} engineers={engineers} dispatch={dispatch} provenance={provenance} />

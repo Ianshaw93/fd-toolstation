@@ -103,6 +103,55 @@ export async function fetchEngineersViaProxy(): Promise<Engineer[]> {
  * insertion); falls back to the web tool's generate endpoint on a backend that predates it,
  * which is enough for "New document".
  */
+export interface PreviousFeeOption<T = unknown> {
+  value: T;
+  count: number;
+  latest_at: string | null;
+  by: string | null;
+}
+
+export interface PreviousFeeOptionsMap {
+  company: PreviousFeeOption<string>[];
+  names: PreviousFeeOption<{ firstName: string; lastName: string }>[];
+  address: PreviousFeeOption<string[]>[];
+  projectName: PreviousFeeOption<string>[];
+  projectLocation: PreviousFeeOption<string>[];
+  country: PreviousFeeOption<'EW' | 'J' | 'OTHER'>[];
+}
+
+export interface PreviousFeeOptionsResponse {
+  synergy_project_ref: string;
+  generation_count: number;
+  options: PreviousFeeOptionsMap;
+}
+
+export const EMPTY_PREVIOUS_FEE_OPTIONS: PreviousFeeOptionsMap = {
+  company: [],
+  names: [],
+  address: [],
+  projectName: [],
+  projectLocation: [],
+  country: [],
+};
+
+export async function fetchPreviousFeeOptions(
+  synergyProjectRef: string,
+  signal?: AbortSignal,
+): Promise<PreviousFeeOptionsResponse> {
+  try {
+    const res = await fetch(
+      `${BACKEND}/fee-proposal/previous-options?synergy_project_ref=${encodeURIComponent(synergyProjectRef)}`,
+      { signal },
+    );
+    if (!res.ok) {
+      return { synergy_project_ref: synergyProjectRef, generation_count: 0, options: EMPTY_PREVIOUS_FEE_OPTIONS };
+    }
+    return await res.json();
+  } catch {
+    return { synergy_project_ref: synergyProjectRef, generation_count: 0, options: EMPTY_PREVIOUS_FEE_OPTIONS };
+  }
+}
+
 export async function renderFeeProposal(
   data: FeeProposalRequest,
   generationContext?: Record<string, unknown>,

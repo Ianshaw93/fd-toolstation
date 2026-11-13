@@ -4,13 +4,14 @@
 
 import type { FeeProposalSnapshot } from '../hooks/useFeeProposal';
 
-export type FillSource = 'synergy' | 'microsoft' | 'contact';
+export type FillSource = 'synergy' | 'microsoft' | 'contact' | 'previous_fee';
 export type AddressReview = Array<'hasAddress_false' | 'home_slot_on_company_record'>;
 
 export type Provenance =
   | { kind: 'synergy'; review?: AddressReview }
   | { kind: 'microsoft' }
   | { kind: 'contact' }
+  | { kind: 'previous_fee' }
   | { kind: 'edited'; was: FillSource }
   /** The user's own value, kept from an earlier project; it is not from the linked one. */
   | { kind: 'carried'; from: string };
@@ -20,6 +21,7 @@ export interface FieldProvenance {
   names: Provenance | null;
   address: Provenance | null;
   projectName: Provenance | null;
+  location: Provenance | null;
   country: Provenance | null;
   engineer: Provenance | null;
 }
@@ -57,12 +59,22 @@ export function fieldProvenance(state: FeeProposalSnapshot): FieldProvenance {
     const from = state.carried_from[field];
     return from ? { kind: 'carried', from } : otherwise;
   };
+  const prevOr = (
+    field: 'company' | 'names' | 'address' | 'projectName' | 'location' | 'country',
+    current: unknown,
+    otherwise: Provenance | null,
+  ): Provenance | null => {
+    const picked = state.previous_fee_picks?.[field];
+    if (picked === undefined) return otherwise;
+    return JSON.stringify(current) === picked ? { kind: 'previous_fee' } : { kind: 'edited', was: 'previous_fee' };
+  };
   return {
-    company: carried('company', fromSynergy(client.company_name ?? '', applied.clientCompanyName)),
-    names: carried('names', names),
-    address: carried('address', address),
-    projectName: carried('projectName', fromSynergy(project.project_name, applied.projectName)),
-    country: carried('country', fromSynergy(project.country, applied.projectCountry)),
+    company: carried('company', prevOr('company', client.company_name ?? '', fromSynergy(client.company_name ?? '', applied.clientCompanyName))),
+    names: carried('names', prevOr('names', { firstName: client.first_name, lastName: client.surname }, names)),
+    address: carried('address', prevOr('address', client.address_lines, address)),
+    projectName: carried('projectName', prevOr('projectName', project.project_name, fromSynergy(project.project_name, applied.projectName))),
+    location: prevOr('location', project.project_location, null),
+    country: carried('country', prevOr('country', project.country, fromSynergy(project.country, applied.projectCountry))),
     engineer,
   };
 }
