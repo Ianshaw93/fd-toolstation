@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const DIRECTORY_API_URL = (
+  process.env.DIRECTORY_API_BASE ||
   process.env.DIRECTORY_API_URL ||
   process.env.NEXT_PUBLIC_DIRECTORY_API_URL ||
   'https://directory-api-production-7f250373.up.railway.app'
