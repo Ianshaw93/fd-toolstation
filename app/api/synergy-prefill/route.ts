@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyMicrosoftIdToken } from '../../../lib/msauth';
+import { callerSession } from '../../../lib/directory-upstream';
 
 const DIRECTORY_API_URL = (
   process.env.DIRECTORY_API_BASE ||
@@ -7,7 +9,33 @@ const DIRECTORY_API_URL = (
   'https://directory-api-production-7f250373.up.railway.app'
 ).replace(/\/+$/, '');
 
+async function isAuthorized(request: NextRequest): Promise<boolean> {
+  if (
+    process.env.NEXT_PUBLIC_AUTH_DISABLED === 'true' &&
+    process.env.VERCEL_ENV !== 'production'
+  ) {
+    return true;
+  }
+  if (callerSession(request)) return true;
+
+  const auth = request.headers.get('authorization');
+  if (auth && /^Bearer\s+/i.test(auth)) {
+    const token = auth.replace(/^Bearer\s+/i, '').trim();
+    try {
+      await verifyMicrosoftIdToken(token);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
 export async function GET(request: NextRequest) {
+  if (!(await isAuthorized(request))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const ref = request.nextUrl.searchParams.get('ref')?.trim();
   if (!ref) {
     return NextResponse.json({ error: 'Missing ref query parameter' }, { status: 400 });
