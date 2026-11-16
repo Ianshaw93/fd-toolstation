@@ -48,6 +48,8 @@ interface FeeGenerationRow {
       synergy_number?: string | null;
       synergy_name?: string | null;
       synergy_status?: string | null;
+      synergy_project_type?: string | null;
+      synergy_manager?: string | null;
       diffs?: string[];
     };
   } | null;
@@ -97,6 +99,18 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function statusBadgeClass(status: string | null | undefined, synFound: boolean): string {
+  if (!synFound) return 'bg-gray-100 text-gray-700';
+  const s = (status || '').toLowerCase();
+  if (s === 'active') return 'bg-green-100 text-green-800';
+  if (s === 'complete' || s === 'finished') return 'bg-teal-100 text-teal-800';
+  if (s === 'proposal') return 'bg-blue-100 text-blue-800';
+  if (s.includes('unsuccessful') || s.includes('cancelled') || s.includes('withdrawn') || s.includes('not proceeding')) {
+    return 'bg-rose-100 text-rose-800';
+  }
+  return 'bg-amber-100 text-amber-800';
+}
+
 function projectRefCode(row: FeeGenerationRow): string {
   const synNum = row.synergy_context?.synergy_comparison?.synergy_number;
   if (synNum) return synNum;
@@ -117,7 +131,9 @@ export default function ProjectFeesPage() {
 
   const [query, setQuery] = useState('');
   const [engineerFilter, setEngineerFilter] = useState('ALL');
-  const [synergyFilter, setSynergyFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [sectorFilter, setSectorFilter] = useState('ALL');
+  const [managerFilter, setManagerFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<'date' | 'fee' | 'ref'>('date');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [synergyPrefills, setSynergyPrefills] = useState<Record<string, SynergyPrefill>>({});
@@ -181,13 +197,65 @@ export default function ProjectFeesPage() {
     return Array.from(set).sort();
   }, [rows]);
 
+  const statuses = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) {
+      const st = r.synergy_context?.synergy_comparison?.synergy_status;
+      if (st) set.add(st);
+    }
+    return Array.from(set).sort();
+  }, [rows]);
+
+  const sectors = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) {
+      const sec = r.synergy_context?.synergy_comparison?.synergy_project_type;
+      if (sec) set.add(sec);
+    }
+    return Array.from(set).sort();
+  }, [rows]);
+
+  const managers = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) {
+      const mgr = r.synergy_context?.synergy_comparison?.synergy_manager;
+      if (mgr) set.add(mgr);
+    }
+    return Array.from(set).sort();
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const list = rows.filter((r) => {
+      const comp = r.synergy_context?.synergy_comparison;
       if (engineerFilter !== 'ALL' && r.engineer_name !== engineerFilter) return false;
-      const synFound = Boolean(r.synergy_context?.synergy_comparison?.synergy_found);
-      if (synergyFilter === 'MATCHED' && !synFound) return false;
-      if (synergyFilter === 'UNMATCHED' && synFound) return false;
+      const synFound = Boolean(comp?.synergy_found);
+      const stLower = (comp?.synergy_status || '').toLowerCase();
+      if (statusFilter === 'BID_WON' && !(stLower === 'active' || stLower === 'complete' || stLower === 'finished')) {
+        return false;
+      } else if (
+        statusFilter === 'BID_LOST' &&
+        !(
+          stLower.includes('unsuccessful') ||
+          stLower.includes('cancelled') ||
+          stLower.includes('withdrawn') ||
+          stLower.includes('not proceeding')
+        )
+      ) {
+        return false;
+      } else if (statusFilter === 'UNMATCHED' && synFound) {
+        return false;
+      } else if (
+        statusFilter !== 'ALL' &&
+        statusFilter !== 'BID_WON' &&
+        statusFilter !== 'BID_LOST' &&
+        statusFilter !== 'UNMATCHED' &&
+        comp?.synergy_status !== statusFilter
+      ) {
+        return false;
+      }
+      if (sectorFilter !== 'ALL' && comp?.synergy_project_type !== sectorFilter) return false;
+      if (managerFilter !== 'ALL' && comp?.synergy_manager !== managerFilter) return false;
 
       if (terms.length === 0) return true;
       const client = r.inputs?.client;
@@ -203,6 +271,9 @@ export default function ProjectFeesPage() {
         ...(client?.address_lines || []),
         project?.project_location,
         r.engineer_name,
+        comp?.synergy_status,
+        comp?.synergy_project_type,
+        comp?.synergy_manager,
         r.synergy_context?.dropbox_path,
         feeLabels,
       ]
@@ -222,7 +293,7 @@ export default function ProjectFeesPage() {
       return (b.created_at || '').localeCompare(a.created_at || '');
     });
     return list;
-  }, [rows, query, engineerFilter, synergyFilter, sortBy]);
+  }, [rows, query, engineerFilter, statusFilter, sectorFilter, managerFilter, sortBy]);
 
   const stats = useMemo(() => {
     const fees = filtered
@@ -256,7 +327,7 @@ export default function ProjectFeesPage() {
 
         {/* Search & Filters */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
             <div className="md:col-span-2">
               <label className="block text-xs font-medium text-gray-500 mb-1">Search</label>
               <input
@@ -285,15 +356,53 @@ export default function ProjectFeesPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Synergy Match</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Synergy Status</label>
               <select
-                value={synergyFilter}
-                onChange={(e) => setSynergyFilter(e.target.value)}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm text-gray-900 bg-white"
               >
-                <option value="ALL">All</option>
-                <option value="MATCHED">Matched in Synergy</option>
+                <option value="ALL">All statuses</option>
+                <option value="BID_WON">Bid Won (Active + Complete)</option>
+                <option value="BID_LOST">Bid Lost / Not Proceeding</option>
+                {statuses.map((st) => (
+                  <option key={st} value={st}>
+                    {st}
+                  </option>
+                ))}
                 <option value="UNMATCHED">Unmatched</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Sector</label>
+              <select
+                value={sectorFilter}
+                onChange={(e) => setSectorFilter(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm text-gray-900 bg-white"
+              >
+                <option value="ALL">All sectors</option>
+                {sectors.map((sec) => (
+                  <option key={sec} value={sec}>
+                    {sec}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Synergy PM</label>
+              <select
+                value={managerFilter}
+                onChange={(e) => setManagerFilter(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm text-gray-900 bg-white"
+              >
+                <option value="ALL">All PMs</option>
+                {managers.map((mgr) => (
+                  <option key={mgr} value={mgr}>
+                    {mgr}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -383,8 +492,10 @@ export default function ProjectFeesPage() {
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(row.created_at)}</td>
                         <td className="px-4 py-3">
                           <div className="font-medium text-gray-900">{row.project_name || '—'}</div>
-                          {project?.project_location && (
-                            <div className="text-xs text-gray-500">{project.project_location}</div>
+                          {(project?.project_location || syn?.synergy_project_type) && (
+                            <div className="text-xs text-gray-500">
+                              {[syn?.synergy_project_type, project?.project_location].filter(Boolean).join(' · ')}
+                            </div>
                           )}
                         </td>
                         <td className="px-4 py-3">
@@ -396,15 +507,14 @@ export default function ProjectFeesPage() {
                           {formatMoney(totalFee)}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          {syn?.synergy_found ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              Matched
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                              Unmatched
-                            </span>
-                          )}
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusBadgeClass(
+                              syn?.synergy_status,
+                              Boolean(syn?.synergy_found),
+                            )}`}
+                          >
+                            {syn?.synergy_found ? syn.synergy_status || 'Matched' : 'Unmatched'}
+                          </span>
                         </td>
                       </tr>
                       {isOpen && (
@@ -447,6 +557,17 @@ export default function ProjectFeesPage() {
                                 <div className="text-gray-700">
                                   Synergy: {row.synergy_project_label || 'Not matched'}
                                 </div>
+                                {(syn?.synergy_status || syn?.synergy_project_type || syn?.synergy_manager) && (
+                                  <div className="text-gray-600 mt-1">
+                                    {[
+                                      syn.synergy_status && `Status: ${syn.synergy_status}`,
+                                      syn.synergy_project_type && `Sector: ${syn.synergy_project_type}`,
+                                      syn.synergy_manager && `PM: ${syn.synergy_manager}`,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </div>
+                                )}
                                 <div className="text-gray-500 mt-1">
                                   Source: <span className="font-mono">{row.source}</span>
                                   {typeof row.synergy_context?.revision === 'number' &&
