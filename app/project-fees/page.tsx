@@ -168,7 +168,7 @@ export default function ProjectFeesPage() {
     async function load() {
       try {
         setLoading(true);
-        const res = await authedFetch(`${API_URL}/word/fee-proposal/generations?limit=500`);
+        const res = await authedFetch(`${API_URL}/word/fee-proposal/generations?limit=2000`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: FeeGenerationRow[] = await res.json();
         if (active) {
