@@ -130,6 +130,7 @@ export default function ProjectFeesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [query, setQuery] = useState('');
+  const [folderFilter, setFolderFilter] = useState('ALL');
   const [engineerFilter, setEngineerFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [sectorFilter, setSectorFilter] = useState('ALL');
@@ -228,6 +229,7 @@ export default function ProjectFeesPage() {
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const list = rows.filter((r) => {
       const comp = r.synergy_context?.synergy_comparison;
+      if (folderFilter !== 'ALL' && r.source !== folderFilter) return false;
       if (engineerFilter !== 'ALL' && r.engineer_name !== engineerFilter) return false;
       const synFound = Boolean(comp?.synergy_found);
       const stLower = (comp?.synergy_status || '').toLowerCase();
@@ -293,7 +295,7 @@ export default function ProjectFeesPage() {
       return (b.created_at || '').localeCompare(a.created_at || '');
     });
     return list;
-  }, [rows, query, engineerFilter, statusFilter, sectorFilter, managerFilter, sortBy]);
+  }, [rows, query, folderFilter, engineerFilter, statusFilter, sectorFilter, managerFilter, sortBy]);
 
   const stats = useMemo(() => {
     const fees = filtered
@@ -327,7 +329,7 @@ export default function ProjectFeesPage() {
 
         {/* Search & Filters */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-8 gap-3">
             <div className="md:col-span-2">
               <label className="block text-xs font-medium text-gray-500 mb-1">Search</label>
               <input
@@ -337,6 +339,20 @@ export default function ProjectFeesPage() {
                 placeholder="Project ref, name, client, location, scope…"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Folder</label>
+              <select
+                value={folderFilter}
+                onChange={(e) => setFolderFilter(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm text-gray-900 bg-white"
+              >
+                <option value="ALL">All folders</option>
+                <option value="dropbox_backfill">01 Projects</option>
+                <option value="dropbox_prospects_backfill">02 Prospects</option>
+                <option value="word_addin">Word Add-in</option>
+              </select>
             </div>
 
             <div>
