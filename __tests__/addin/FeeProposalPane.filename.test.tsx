@@ -140,7 +140,7 @@ describe('Word fee pane suggested filename', () => {
     await link('0602 Brick House Farm', '0602');
 
     const expected = buildFeeProposalFilename({ numberFormatted: '0602', projectName: 'Brick: House/Farm' });
-    expect(expected).toMatch(/^0602 Brick House Farm Fire Dynamics Group Fee Proposal \d{2}-\d{2}-\d{2}$/);
+    expect(expected).toBe('0602-Fire Dynamics-Fee-Brick House Farm-Rev00');
     expect(await screen.findByTestId('suggested-filename')).toHaveValue(expected);
     expect(screen.getByTestId('suggested-filename-note')).toHaveTextContent(/use it as the filename when you save/i);
     expect(applyTitle).not.toHaveBeenCalled();
