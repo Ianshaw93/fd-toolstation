@@ -99,10 +99,17 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function isSynergyMatched(row: FeeGenerationRow): boolean {
+  return Boolean(
+    row.synergy_context?.synergy_comparison?.synergy_found ||
+      row.synergy_project_ref?.startsWith('synergy:'),
+  );
+}
+
 function statusBadgeClass(status: string | null | undefined, synFound: boolean): string {
   if (!synFound) return 'bg-gray-100 text-gray-700';
   const s = (status || '').toLowerCase();
-  if (s === 'active') return 'bg-green-100 text-green-800';
+  if (!s || s === 'active') return 'bg-green-100 text-green-800';
   if (s === 'complete' || s === 'finished') return 'bg-teal-100 text-teal-800';
   if (s === 'proposal') return 'bg-blue-100 text-blue-800';
   if (s.includes('unsuccessful') || s.includes('cancelled') || s.includes('withdrawn') || s.includes('not proceeding')) {
@@ -229,7 +236,7 @@ export default function ProjectFeesPage() {
     const list = rows.filter((r) => {
       const comp = r.synergy_context?.synergy_comparison;
       if (engineerFilter !== 'ALL' && r.engineer_name !== engineerFilter) return false;
-      const synFound = Boolean(comp?.synergy_found);
+      const synFound = isSynergyMatched(r);
       const stLower = (comp?.synergy_status || '').toLowerCase();
       if (statusFilter === 'BID_WON' && !(stLower === 'active' || stLower === 'complete' || stLower === 'finished')) {
         return false;
@@ -302,7 +309,7 @@ export default function ProjectFeesPage() {
       .sort((a, b) => a - b);
     const totalValue = fees.reduce((acc, v) => acc + v, 0);
     const median = fees.length ? fees[Math.floor(fees.length / 2)] : null;
-    const matched = filtered.filter((r) => r.synergy_context?.synergy_comparison?.synergy_found).length;
+    const matched = filtered.filter(isSynergyMatched).length;
     return { count: filtered.length, totalValue, median, matched };
   }, [filtered]);
 
@@ -476,6 +483,7 @@ export default function ProjectFeesPage() {
                   const client = row.inputs?.client;
                   const project = row.inputs?.project;
                   const syn = row.synergy_context?.synergy_comparison;
+                  const synFound = isSynergyMatched(row);
                   const feeItems = row.synergy_context?.fee_items || [];
                   const totalFee = row.synergy_context?.total_fee;
                   const contactName = [client?.first_name, client?.surname].filter(Boolean).join(' ');
@@ -510,10 +518,10 @@ export default function ProjectFeesPage() {
                           <span
                             className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusBadgeClass(
                               syn?.synergy_status,
-                              Boolean(syn?.synergy_found),
+                              synFound,
                             )}`}
                           >
-                            {syn?.synergy_found ? syn.synergy_status || 'Matched' : 'Unmatched'}
+                            {synFound ? syn?.synergy_status || 'Matched' : 'Unmatched'}
                           </span>
                         </td>
                       </tr>
