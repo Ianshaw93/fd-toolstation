@@ -49,6 +49,7 @@ export interface FeeOptions {
   engineer_name: string;
   pii_limit: number;
   include_hourly_rates: boolean;
+  business_terms?: string;
 }
 
 export interface DesignStagesRiba1to4 {
@@ -91,6 +92,7 @@ export interface FeeProposalRequest {
   design_stages_1_4: DesignStagesRiba1to4;
   design_stages_5: DesignStagesRiba5;
   design_stages_6: DesignStagesRiba6;
+  text_overrides?: Record<string, string>;
 }
 
 /** A shared wording block used by all future fee proposals. */

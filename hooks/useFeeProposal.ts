@@ -16,6 +16,7 @@ import type {
   ServiceKey6,
 } from '../lib/fee-types';
 import { defaultServiceConfig } from '../lib/fee-constants';
+import { getBusinessTermsPreset } from '../lib/business-terms';
 import { splitAddressLines } from '../lib/address-format';
 import { NO_CONTACT_SUGGESTIONS, readContactSuggestions, type ContactSuggestions } from '../lib/client-contact-suggestions';
 import { prefillNotice } from '../lib/directory-prefill';
@@ -98,6 +99,8 @@ interface FeeProposalState {
   previous_fee_picks?: Partial<Record<PreviousOptionField, string>>;
   /** Raw values Total Synergy offered on the current project, so users can switch back from a previous fee. */
   synergy_offer?: SynergyOfferMap;
+  /** Per-proposal wording overrides keyed by block key (e.g. TERMS_ACE, TERMS_WINVIC). */
+  text_overrides?: Record<string, string>;
 }
 
 export type FeeProposalSnapshot = FeeProposalState;
@@ -118,6 +121,8 @@ type Action =
   | { type: 'RESOLVE_DIRECTORY_PROPOSAL'; field: ReviewField; choice: 'use' | 'keep' }
   | { type: 'UNLINK_SYNERGY_PROJECT' }
   | { type: 'SET_FEE_OPTIONS'; field: keyof FeeOptions; value: string | number | boolean }
+  | { type: 'SET_TEXT_OVERRIDE'; key: string; value: string }
+  | { type: 'RESET_TEXT_OVERRIDES'; keys: string[] }
   | { type: 'SET_SERVICE_1_4'; key: ServiceKey1to4; field: keyof ServiceConfig; value: boolean | number | string | null }
   | { type: 'SET_SERVICE_5'; key: ServiceKey5; field: keyof ServiceConfig; value: boolean | number | string | null }
   | { type: 'SET_SERVICE_6'; key: ServiceKey6; field: keyof ServiceConfig; value: boolean | number | string | null }
@@ -152,7 +157,8 @@ function initialState(): FeeProposalState {
     previous_fee_options: null,
     previous_fee_picks: {},
     synergy_offer: {},
-    fee_options: { engineer_name: '', pii_limit: 100000, include_hourly_rates: false },
+    text_overrides: {},
+    fee_options: { engineer_name: '', pii_limit: 100000, include_hourly_rates: false, business_terms: 'ace' },
     design_stages_1_4: {
       stage_1: defaultServiceConfig(),
       stage_2: defaultServiceConfig(),
@@ -570,10 +576,14 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
         },
       };
 
-    case 'SET_FEE_OPTIONS':
+    case 'SET_FEE_OPTIONS': {
+      const nextFeeOptions: FeeOptions = { ...state.fee_options, [action.field]: action.value };
+      if (action.field === 'business_terms') {
+        nextFeeOptions.pii_limit = getBusinessTermsPreset(String(action.value)).defaultPiiLimit;
+      }
       return {
         ...state,
-        fee_options: { ...state.fee_options, [action.field]: action.value },
+        fee_options: nextFeeOptions,
         ...(action.field === 'engineer_name'
           ? {
               engineer_source: 'user' as const,
@@ -582,6 +592,19 @@ function reducer(state: FeeProposalState, action: Action): FeeProposalState {
             }
           : {}),
       };
+    }
+
+    case 'SET_TEXT_OVERRIDE':
+      return {
+        ...state,
+        text_overrides: { ...(state.text_overrides ?? {}), [action.key]: action.value },
+      };
+
+    case 'RESET_TEXT_OVERRIDES': {
+      const next = { ...(state.text_overrides ?? {}) };
+      for (const k of action.keys) delete next[k];
+      return { ...state, text_overrides: next };
+    }
 
     case 'SET_SERVICE_1_4':
       return {
@@ -720,18 +743,26 @@ export function useFeeProposal() {
     return total;
   }, [state.design_stages_1_4, state.design_stages_5, state.design_stages_6]);
 
-  const buildRequest = (): FeeProposalRequest => ({
-    client: {
-      ...state.client,
-      company_name: state.client.company_name ?? '',
-      address_lines: state.client.address_lines.filter((l) => l.trim() !== ''),
-    },
-    project: state.project,
-    fee_options: state.fee_options,
-    design_stages_1_4: state.design_stages_1_4,
-    design_stages_5: state.design_stages_5,
-    design_stages_6: state.design_stages_6,
-  });
+  const buildRequest = (): FeeProposalRequest => {
+    const overrides = state.text_overrides ?? {};
+    const hasOverrides = Object.keys(overrides).length > 0;
+    return {
+      client: {
+        ...state.client,
+        company_name: state.client.company_name ?? '',
+        address_lines: state.client.address_lines.filter((l) => l.trim() !== ''),
+      },
+      project: state.project,
+      fee_options: {
+        ...state.fee_options,
+        business_terms: state.fee_options.business_terms ?? 'ace',
+      },
+      design_stages_1_4: state.design_stages_1_4,
+      design_stages_5: state.design_stages_5,
+      design_stages_6: state.design_stages_6,
+      ...(hasOverrides ? { text_overrides: overrides } : {}),
+    };
+  };
 
   return { state, dispatch, totalFee, buildRequest };
 }

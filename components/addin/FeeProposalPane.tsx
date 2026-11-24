@@ -237,7 +237,15 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
         />
       </CollapsibleSection>
       <CollapsibleSection title="Fee Options" dense defaultOpen={true}>
-        <FeeOptionsSection feeOptions={state.fee_options} engineers={engineers} dispatch={dispatch} provenance={provenance} />
+        <FeeOptionsSection
+          feeOptions={state.fee_options}
+          engineers={engineers}
+          dispatch={dispatch}
+          provenance={provenance}
+          textOverrides={state.text_overrides}
+          vatApplies={state.project.country === 'EW' || (state.project.country === 'OTHER' && state.project.vat_applicable)}
+          showTermsPreview
+        />
         {account && engineersReady && !accountEngineer && !state.fee_options.engineer_name && (
           <p className="mt-2 text-xs text-gray-600">
             {account.name || account.username} is not on the engineer list, so no engineer was chosen. Pick one above.
