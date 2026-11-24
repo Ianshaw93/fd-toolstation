@@ -169,6 +169,48 @@ export default function ClientDetailsSection({ client, dispatch, showCompany = f
           dispatch={dispatch}
         />
       </div>
+      {showCompany && (() => {
+        const firstName = client.first_name.trim();
+        const fullName = [firstName, client.surname.trim()].filter(Boolean).join(' ');
+        const companyTrimmed = (client.company_name ?? '').trim();
+        const nonEmptyAddress = client.address_lines.map((l) => l.trim()).filter(Boolean);
+        const previewAddressLines =
+          companyTrimmed &&
+          (nonEmptyAddress.length === 0 ||
+            nonEmptyAddress[0].toLowerCase() !== companyTrimmed.toLowerCase())
+            ? [companyTrimmed, ...nonEmptyAddress]
+            : nonEmptyAddress;
+
+        return (
+          <div
+            data-testid="letter-address-preview"
+            className="md:col-span-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-800"
+          >
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+              On the letter
+            </div>
+            <div className="space-y-0.5 leading-snug">
+              {fullName ? (
+                <div className="mb-2">{fullName}</div>
+              ) : (
+                <div className="mb-2 italic text-amber-700">[First Name] [Surname]</div>
+              )}
+              {previewAddressLines.length > 0 ? (
+                previewAddressLines.map((line, idx) => <div key={idx}>{line}</div>)
+              ) : (
+                <div className="italic text-gray-400">[Address]</div>
+              )}
+              <div className="pt-2">
+                {firstName ? (
+                  <span>Dear {firstName},</span>
+                ) : (
+                  <span className="italic text-amber-700">Dear [First Name],</span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
