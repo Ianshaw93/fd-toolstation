@@ -34,6 +34,7 @@ export default function ProjectDetailsSection({ project, dispatch, provenance, p
         </div>
         <input
           type="text"
+          autoComplete="off"
           value={project.project_name}
           onChange={(e) => dispatch({ type: 'SET_PROJECT', field: 'project_name', value: e.target.value })}
           className="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
@@ -55,6 +56,7 @@ export default function ProjectDetailsSection({ project, dispatch, provenance, p
         </div>
         <input
           type="text"
+          autoComplete="off"
           value={project.project_location}
           onChange={(e) => dispatch({ type: 'SET_PROJECT', field: 'project_location', value: e.target.value })}
           className="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"

@@ -52,6 +52,7 @@ export default function ClientDetailsSection({ client, dispatch, showCompany = f
           <input
             id={`${id}-company`}
             type="text"
+            autoComplete="off"
             value={client.company_name ?? ''}
             onChange={(e) => dispatch({ type: 'SET_CLIENT', field: 'company_name', value: e.target.value })}
             className="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
@@ -107,6 +108,7 @@ export default function ClientDetailsSection({ client, dispatch, showCompany = f
         <input
           id={`${id}-first`}
           type="text"
+          autoComplete="off"
           value={client.first_name}
           onChange={(e) => dispatch({ type: 'SET_CLIENT', field: 'first_name', value: e.target.value })}
           className="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
@@ -117,6 +119,7 @@ export default function ClientDetailsSection({ client, dispatch, showCompany = f
         <input
           id={`${id}-surname`}
           type="text"
+          autoComplete="off"
           value={client.surname}
           onChange={(e) => dispatch({ type: 'SET_CLIENT', field: 'surname', value: e.target.value })}
           className="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
@@ -148,6 +151,7 @@ export default function ClientDetailsSection({ client, dispatch, showCompany = f
             <input
               key={i}
               type="text"
+              autoComplete="off"
               value={line}
               placeholder={i === 0 ? 'Address line 1' : `Address line ${i + 1} (optional)`}
               onChange={(e) => {

@@ -157,6 +157,7 @@ export default function SynergyProjectPicker({ selectedRef, selectedLabel, onSel
         <input
           id="synergy-search-input"
           type="text"
+          autoComplete="off"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
