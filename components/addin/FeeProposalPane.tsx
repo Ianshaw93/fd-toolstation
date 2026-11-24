@@ -162,14 +162,20 @@ export default function FeeProposalPane({ inWord, busy, run, signIn }: Props) {
         carried_from: state.carried_from,
         client_role_notice: state.client_role_notice,
       });
-      const filenameToSave = activeFilename || suggestedFilename;
+      const fallbackProjectName = state.project.project_name.trim();
+      const filenameToSave =
+        activeFilename ||
+        suggestedFilename ||
+        (fallbackProjectName ? buildFeeProposalFilename({ projectName: fallbackProjectName }) : '');
       if (filenameToSave) {
         const outcome = await createNamedFeeProposalDocument(filenameToSave, b64);
         setGenerationResult(outcome);
         if (outcome.saved) {
           return `Saved as ${outcome.filename}. Move it to the project folder (e.g. Dropbox).`;
         }
-        return 'Fee proposal opened as a new document.';
+        return outcome.reason
+          ? `Fee proposal opened as a new document (${outcome.reason}).`
+          : 'Fee proposal opened as a new document.';
       }
       await newDocumentFromBase64(b64);
       return 'Fee proposal opened as a new document.';

@@ -428,6 +428,7 @@ describe('createNamedFeeProposalDocument', () => {
         saved: false,
         filename: TEST_FILENAME,
         savedLocation: null,
+        reason: 'WordApiHiddenDocument 1.5 not supported in this Word build',
       });
     });
   });
@@ -466,6 +467,7 @@ describe('createNamedFeeProposalDocument', () => {
         saved: false,
         filename: TEST_FILENAME,
         savedLocation: null,
+        reason: 'WordApiHiddenDocument 1.5 not supported in this Word build',
       });
     });
   });

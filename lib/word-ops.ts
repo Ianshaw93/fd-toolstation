@@ -60,6 +60,7 @@ export interface NamedProposalResult {
   saved: boolean;
   filename: string;
   savedLocation: string | null;
+  reason?: string;
 }
 
 export function uint8ArrayToBase64(bytes: Uint8Array): string {
@@ -151,11 +152,11 @@ export async function createNamedFeeProposalDocument(name: string, docBase64?: s
     // Path A: WordApiHiddenDocument 1.5 (Desktop). Creates document from base64, saves with name, and opens it.
     const base64 = docBase64 ?? (await getDocumentBase64());
     let savedLocation: string | null = null;
-    try {
+    const trySaveHidden = async (targetName: string) => {
       await Word.run(async (ctx: any) => {
         const saveBehavior = Word.SaveBehavior?.save ?? 'Save';
         const d = ctx.application.createDocument(base64);
-        d.save(saveBehavior, cleanName);
+        d.save(saveBehavior, targetName);
         d.open();
         await ctx.sync();
 
@@ -169,15 +170,28 @@ export async function createNamedFeeProposalDocument(name: string, docBase64?: s
           }
         }
       });
+    };
+
+    try {
+      await trySaveHidden(cleanName);
       return { path: 'A', saved: true, filename: cleanName, savedLocation };
     } catch {
-      // If saving fails (e.g. existing file is locked by Word), fall back to opening without saving
-      await Word.run(async (ctx: any) => {
-        const d = ctx.application.createDocument(base64);
-        d.open();
-        await ctx.sync();
-      });
-      return { path: 'C', saved: false, filename: cleanName, savedLocation: null };
+      // Retry once with a unique timestamp suffix in case cleanName.docx already exists or is locked.
+      const now = new Date();
+      const stamp = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+      const uniqueName = `${cleanName} ${stamp}`;
+      try {
+        await trySaveHidden(uniqueName);
+        return { path: 'A', saved: true, filename: uniqueName, savedLocation };
+      } catch (err) {
+        await Word.run(async (ctx: any) => {
+          const d = ctx.application.createDocument(base64);
+          d.open();
+          await ctx.sync();
+        });
+        const reason = err instanceof Error ? err.message : 'Word hidden save failed';
+        return { path: 'C', saved: false, filename: cleanName, savedLocation: null, reason };
+      }
     }
   }
 
@@ -209,7 +223,13 @@ export async function createNamedFeeProposalDocument(name: string, docBase64?: s
     d.open();
     await ctx.sync();
   });
-  return { path: 'C', saved: false, filename: cleanName, savedLocation: null };
+  return {
+    path: 'C',
+    saved: false,
+    filename: cleanName,
+    savedLocation: null,
+    reason: 'WordApiHiddenDocument 1.5 not supported in this Word build',
+  };
 }
 
 export async function newDocumentFromBase64(base64: string): Promise<void> {
